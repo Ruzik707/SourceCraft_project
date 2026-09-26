@@ -11,3 +11,7 @@ dist/
 # системное
 .DS_Store
 *.log
+
+# Данные парсера (чтобы огромный датасет не улетал в GitHub)
+repo_health_data.csv
+history.csv

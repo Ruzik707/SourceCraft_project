@@ -57,7 +57,9 @@ def to_summary(row: dict) -> dict:
         "url": _clean(row.get("url")),
         "description": _clean(row.get("description")),
         "primary_language": _clean(row.get("primary_language")),
-        "likes": float(row.get("likes") or 0),
+        # Округление до целого — правка соседа. clean_value обязателен:
+        # NaN в Python истинный, а int(nan) падает с ValueError.
+        "likes": int(float(clean_value(row.get("likes")) or 0)),
         "last_activity_at": _clean(row.get("last_activity_at")),
         "analyzed_at": _clean(row.get("analyzed_at")),
         "total_score": _opt_float(row.get("total_score")),

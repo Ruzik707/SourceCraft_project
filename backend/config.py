@@ -65,20 +65,23 @@ PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
 
 # ─────────────────────────────── SourceCraft ─────────────────────────────────
 SOURCECRAFT_API = os.getenv("SOURCECRAFT_API", "https://api.sourcecraft.tech")
-# Список репозиториев пользователя. Проверено на живом API 27.09.2026:
-#   /me/repos       → 200, репозитории пользователя
-#   /user/repos     → 405, /users/me/repos → 404
-#   /repos?mine=true → 200, но отдаёт больше записей, чем у пользователя есть,
-#                      то есть параметр mine платформой не учитывается — в запасные
-#                      адреса не берём, иначе в кабинет попадут чужие проекты.
-SOURCECRAFT_REPOS_PATHS = os.getenv("SOURCECRAFT_REPOS_PATHS", "/me/repos").split(",")
 # Адреса проверены на живом API 27.09.2026 скриптом tools/dump_my_repos.py.
 # Профиль лежит на /user (на /me платформа отвечает 404).
 SOURCECRAFT_PROFILE_PATH = os.getenv("SOURCECRAFT_PROFILE_PATH", "/user")
-# Только адреса в области пользователя. Глобальные списки вроде /organizations
-# сюда добавлять нельзя: сервис уйдёт собирать чужие репозитории.
+
+# Список репозиториев пользователя.
+#   /me/repos → 200, но отдаёт не все: в выдаче были проекты одной организации,
+#               а личный репозиторий отсутствовал. Поэтому основной источник —
+#               организации пользователя, а этот адрес дополняет их.
+#   /repos    → общий список платформы: в запасные адреса не берём, иначе в
+#               кабинет попадут чужие проекты (уже случалось).
+#   /user/repos → 405, /users/me/repos → 404, /repos?mine=true игнорирует mine.
+SOURCECRAFT_REPOS_PATHS = os.getenv("SOURCECRAFT_REPOS_PATHS", "/me/repos").split(",")
+
+# Только адреса в области пользователя: глобальные списки вернут чужие организации.
 # /me/orgs → 200; /me/organizations отвечает 405
 SOURCECRAFT_ORG_PATHS = os.getenv("SOURCECRAFT_ORG_PATHS", "/me/orgs").split(",")
+
 # /orgs/{slug}/repos → 200; /organizations/{slug}/repos отвечает 404
 SOURCECRAFT_ORG_REPOS_TEMPLATES = os.getenv(
     "SOURCECRAFT_ORG_REPOS_TEMPLATES", "/orgs/{slug}/repos"

@@ -44,11 +44,12 @@ PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
 
 # ─────────────────────────────── SourceCraft ─────────────────────────────────
 SOURCECRAFT_API = os.getenv("SOURCECRAFT_API", "https://api.sourcecraft.tech")
-# Путь списка репозиториев пользователя и вид заголовка авторизации.
-# Подбираются скриптом tools/probe_sourcecraft.py и подставляются сюда без правок кода.
+
+# ИСПРАВЛЕНИЕ: Ставим /me/repos на первое место, так как именно он отдаёт ЛИЧНЫЕ проекты
 SOURCECRAFT_REPOS_PATHS = os.getenv(
-    "SOURCECRAFT_REPOS_PATHS", "/me/repos,/user/repos,/users/me/repos,/repos?mine=true"
+    "SOURCECRAFT_REPOS_PATHS", "/me/repos,/repos"
 ).split(",")
+
 SOURCECRAFT_AUTH_HEADER = os.getenv("SOURCECRAFT_AUTH_HEADER", "Authorization")
 SOURCECRAFT_AUTH_TEMPLATE = os.getenv("SOURCECRAFT_AUTH_TEMPLATE", "Bearer {t}")
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "15"))

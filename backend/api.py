@@ -8,7 +8,8 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from backend import analyses, auth, presenter
-from backend.config import (ALLOW_DEMO_AUTH, API_PREFIX, FRONTEND_URL, SCHEDULE_CRON)
+from backend.config import (ALLOW_DEMO_AUTH, API_PREFIX, FRONTEND_URL, SCHEDULE_CRON,
+                            SOURCECRAFT_FALLBACK_TOKEN)
 from backend.db import history_for, session_scope, UserSession
 from backend.scheduler import next_run_at
 from backend.sourcecraft import SourceCraftError, list_user_repos
@@ -181,6 +182,11 @@ def set_sourcecraft_token(token: str = Body(embed=True), current=Depends(auth.re
 async def my_repos(current=Depends(auth.require_user)):
     user, session_row = current
     platform_token = session_row.sourcecraft_token or session_row.yandex_token
+    if not platform_token and SOURCECRAFT_FALLBACK_TOKEN and ALLOW_DEMO_AUTH:
+        # Стендовый запасной токен: удобно для демонстрации, но в проде так нельзя —
+        # иначе каждый вошедший увидит репозитории владельца токена.
+        log.warning("Используется запасной токен SourceCraft из настроек сервиса")
+        platform_token = SOURCECRAFT_FALLBACK_TOKEN
 
     repos: list[dict] = []
     demo = False

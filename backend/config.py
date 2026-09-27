@@ -50,6 +50,9 @@ SOURCECRAFT_REPOS_PATHS = os.getenv(
     "SOURCECRAFT_REPOS_PATHS", "/me/repos,/user/repos,/users/me/repos,/repos?mine=true"
 ).split(",")
 SOURCECRAFT_AUTH_HEADER = os.getenv("SOURCECRAFT_AUTH_HEADER", "Authorization")
+# Запасной токен для стенда: используется, если у сессии своего токена нет.
+# Работает только вместе с ALLOW_DEMO_AUTH — иначе все увидят репозитории его владельца.
+SOURCECRAFT_FALLBACK_TOKEN = os.getenv("SOURCECRAFT_TOKEN", "")
 SOURCECRAFT_AUTH_TEMPLATE = os.getenv("SOURCECRAFT_AUTH_TEMPLATE", "Bearer {t}")
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "15"))
 

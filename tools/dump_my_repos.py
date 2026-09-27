@@ -85,19 +85,44 @@ def items_of(data) -> list:
 
 
 def pick_auth(client: httpx.Client) -> tuple[str, str] | None:
-    """Ищет схему заголовка, которую платформа принимает для этого токена."""
+    """Ищет схему заголовка, которую платформа принимает для этого токена.
+
+    Проверяем на двух адресах: профиль и заведомо существующий публичный
+    репозиторий. Личный токен может не давать доступа к профилю, но работать
+    с репозиториями — тогда 401 на /me ещё ничего не значит.
+    Медленное первое рукопожатие не должно выглядеть как отказ, поэтому
+    неудавшиеся по сети варианты проверяются повторно.
+    """
     print("0. Подбираем схему авторизации\n")
+    probes = ["/me", "/repos/userver/userver"]
+    retry: list[tuple[str, str]] = []
+
+    def attempt(header: str, template: str, quiet: bool = False) -> bool:
+        results = []
+        for path in probes:
+            try:
+                r = client.get(path, headers={header: template.format(t=TOKEN),
+                                              "Accept": "application/json"})
+                results.append((path, r.status_code))
+            except httpx.HTTPError as exc:
+                results.append((path, type(exc).__name__))
+        shown = ", ".join(f"{p} → {code}" for p, code in results)
+        ok = any(code == 200 for _, code in results)
+        if not quiet:
+            print(f"   {'✓' if ok else '·'} {header}: {template.replace('{t}', '<токен>')} — {shown}")
+        if not ok and any(isinstance(code, str) for _, code in results):
+            retry.append((header, template))
+        return ok
+
     for header, template in AUTH_VARIANTS:
-        try:
-            r = client.get("/me", headers={header: template.format(t=TOKEN),
-                                           "Accept": "application/json"})
-        except httpx.HTTPError as exc:
-            print(f"   ✗ {header}: {template.replace('{t}', '<токен>')} — {type(exc).__name__}")
-            continue
-        mark = "✓" if r.status_code == 200 else "·"
-        print(f"   {mark} {header}: {template.replace('{t}', '<токен>')} — {r.status_code}")
-        if r.status_code == 200:
+        if attempt(header, template):
             return header, template
+
+    if retry:
+        print("\n   Повтор для вариантов, не дошедших до сервера с первого раза:\n")
+        for header, template in retry:
+            if attempt(header, template):
+                return header, template
     return None
 
 
@@ -111,7 +136,8 @@ def main() -> int:
 
     print(f"Токен: {TOKEN[:8]}…{TOKEN[-4:]} (длина {len(TOKEN)})\n")
 
-    with httpx.Client(base_url=BASE, timeout=httpx.Timeout(20.0, connect=8.0),
+    # Первое рукопожатие к платформе бывает долгим: даём запас на соединение
+    with httpx.Client(base_url=BASE, timeout=httpx.Timeout(30.0, connect=25.0),
                       follow_redirects=True) as client:
         auth = pick_auth(client)
         if auth is None:

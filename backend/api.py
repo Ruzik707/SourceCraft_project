@@ -276,10 +276,15 @@ def _demo_repos(login: str) -> list[dict]:
             if row["full_path"] not in seen:
                 seen.add(row["full_path"])
                 rows.append(row)
-    return [{"full_path": r["full_path"], "owner": r.get("owner"), "name": r.get("name"),
-             "id": r.get("id"), "url": r.get("url"), "description": r.get("description"),
-             "primary_language": r.get("primary_language"), "visibility": "public",
-             "role": "maintainer"} for r in rows]
+    clean = presenter.clean_value
+    return [{"full_path": r["full_path"], "owner": clean(r.get("owner")),
+             "name": clean(r.get("name")), "id": clean(r.get("id")),
+             "url": clean(r.get("url")), "description": clean(r.get("description")),
+             "primary_language": clean(r.get("primary_language")),
+             "likes": float(clean(r.get("likes")) or 0),
+             "visibility": clean(r.get("visibility")) or "public",
+             "organization_name": clean(r.get("owner")),
+             "role": "участник"} for r in rows]
 
 
 def _own_repo(repo: dict, demo: bool) -> dict:
@@ -288,8 +293,10 @@ def _own_repo(repo: dict, demo: bool) -> dict:
     if row is not None:
         summary = presenter.to_summary(row)
         # Описание и язык в витрине могут быть старше, чем на платформе
-        summary["description"] = repo.get("description") or summary.get("description")
-        summary["primary_language"] = summary.get("primary_language") or repo.get("primary_language")
+        summary["description"] = (presenter.clean_value(repo.get("description"))
+                                  or summary.get("description"))
+        summary["primary_language"] = (summary.get("primary_language")
+                                       or presenter.clean_value(repo.get("primary_language")))
     else:
         # Репозиторий ещё не анализировался: показываем то, что известно платформе
         summary = {

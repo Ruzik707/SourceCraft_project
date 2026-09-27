@@ -14,19 +14,40 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const repos = useMyRepos(true);
   const [filter, setFilter] = useState('');
-  const [onlyMine, setOnlyMine] = useState(true);
+  const [org, setOrg] = useState<string>('all');
+  const [sort, setSort] = useState<'default' | 'score' | 'name'>('default');
+  const [hideEmpty, setHideEmpty] = useState(true);
   const [platformToken, setPlatformToken] = useState('');
   const [savingToken, setSavingToken] = useState(false);
   const queryClient = useQueryClient();
   const runs = loadRuns().slice(0, 6);
 
   const all = repos.data ?? [];
-  const hasOwn = all.some((r) => r.source !== 'accessible');
-  const accessibleCount = all.filter((r) => r.source === 'accessible').length;
-  const items = all.filter((r) => {
-    if (onlyMine && hasOwn && r.source === 'accessible') return false;
-    return filter ? r.full_path.toLowerCase().includes(filter.toLowerCase()) : true;
-  });
+
+  // Организации собираем из самого списка: их состав приходит с платформы
+  const organizations = Array.from(
+    all.reduce((acc, r) => {
+      const slug = r.owner ?? '—';
+      const entry = acc.get(slug) ?? { slug, label: r.organization_name ?? slug, count: 0 };
+      entry.count += 1;
+      acc.set(slug, entry);
+      return acc;
+    }, new Map<string, { slug: string; label: string; count: number }>()).values(),
+  ).sort((a, b) => b.count - a.count);
+
+  const emptyCount = all.filter((r) => r.is_empty).length;
+
+  const items = all
+    .filter((r) => {
+      if (org !== 'all' && r.owner !== org) return false;
+      if (hideEmpty && r.is_empty) return false;
+      return filter ? r.full_path.toLowerCase().includes(filter.toLowerCase()) : true;
+    })
+    .sort((a, b) => {
+      if (sort === 'score') return (b.total_score ?? -1) - (a.total_score ?? -1);
+      if (sort === 'name') return a.full_path.localeCompare(b.full_path);
+      return 0; // порядок с сервера: личная организация первой
+    });
 
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
@@ -109,29 +130,76 @@ export function DashboardPage() {
       ) : null}
 
       <div className="stack-sm">
-        <div className="row-wrap" style={{ justifyContent: 'space-between' }}>
+        <div className="row-wrap" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <span className="text-muted">
-            {repos.isLoading ? 'Загружаем список…' : `Доступно ${formatNumber(items.length)} репозиториев`}
+            {repos.isLoading
+              ? 'Загружаем список…'
+              : `Показано ${formatNumber(items.length)} из ${formatNumber(all.length)}`}
           </span>
-          <span className="row-wrap">
-            {accessibleCount > 0 && hasOwn ? (
-              <label className="checkbox" title="Платформа отдаёт и просто доступные вам проекты">
+
+          <div className="row-wrap" style={{ gap: 'var(--space-3)' }}>
+            {organizations.length > 1 ? (
+              <div className="field">
+                <label className="field__label" htmlFor="org">
+                  Организация
+                </label>
+                <select
+                  id="org"
+                  className="select"
+                  value={org}
+                  onChange={(e) => setOrg(e.target.value)}
+                >
+                  <option value="all">Все ({all.length})</option>
+                  {organizations.map((o) => (
+                    <option key={o.slug} value={o.slug}>
+                      {o.label} ({o.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            <div className="field">
+              <label className="field__label" htmlFor="dash-sort">
+                Сортировка
+              </label>
+              <select
+                id="dash-sort"
+                className="select"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as typeof sort)}
+              >
+                <option value="default">Сначала личные</option>
+                <option value="score">По Repo Health Score</option>
+                <option value="name">По названию</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label className="field__label" htmlFor="dash-filter">
+                Поиск
+              </label>
+              <input
+                id="dash-filter"
+                className="input"
+                placeholder="Фильтр по названию"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                style={{ maxWidth: 240 }}
+              />
+            </div>
+
+            {emptyCount > 0 ? (
+              <label className="checkbox" style={{ marginBottom: 8 }}>
                 <input
                   type="checkbox"
-                  checked={onlyMine}
-                  onChange={(e) => setOnlyMine(e.target.checked)}
+                  checked={hideEmpty}
+                  onChange={(e) => setHideEmpty(e.target.checked)}
                 />
-                Только мои ({accessibleCount} доступных скрыто)
+                Скрыть пустые ({emptyCount})
               </label>
             ) : null}
-            <input
-              className="input"
-              placeholder="Фильтр по названию"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              style={{ maxWidth: 260 }}
-            />
-          </span>
+          </div>
         </div>
 
         {repos.isLoading ? (

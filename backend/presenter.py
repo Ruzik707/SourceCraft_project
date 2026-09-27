@@ -24,11 +24,18 @@ PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 engine = SourceCraftRecommendationEngine()
 
 
-def _clean(value: Any) -> Any:
-    """NaN в JSON не сериализуется: превращаем в None."""
+def clean_value(value: Any) -> Any:
+    """NaN в JSON не сериализуется: превращаем в None.
+
+    Осторожно: NaN в Python истинный, поэтому выражения вида «a or b» его не
+    отфильтровывают — значение нужно чистить явно.
+    """
     if isinstance(value, float) and math.isnan(value):
         return None
     return value
+
+
+_clean = clean_value
 
 
 def _opt_float(value: Any) -> float | None:

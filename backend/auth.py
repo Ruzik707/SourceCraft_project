@@ -36,6 +36,12 @@ STATE_TTL_SECONDS = 600
 
 
 def yandex_configured() -> bool:
+    """Есть ли хоть какой-то рабочий вход через Яндекс."""
+    return bool(YANDEX_CLIENT_ID)
+
+
+def code_flow_available() -> bool:
+    """Code-поток требует секрета приложения; без него используется implicit."""
     return bool(YANDEX_CLIENT_ID and YANDEX_CLIENT_SECRET)
 
 
@@ -45,9 +51,10 @@ def _sign(payload: bytes) -> str:
     return base64.urlsafe_b64encode(digest).decode().rstrip("=")
 
 
-def make_state(redirect_uri: str) -> str:
+def make_state(redirect_uri: str, next_path: str = "/dashboard") -> str:
     payload = json.dumps({
         "redirect_uri": redirect_uri,
+        "next": next_path,
         "nonce": secrets.token_urlsafe(8),
         "exp": int((utcnow() + timedelta(seconds=STATE_TTL_SECONDS)).timestamp()),
     }, separators=(",", ":")).encode()
@@ -78,14 +85,31 @@ def callback_uri() -> str:
     return f"{PUBLIC_API_URL.rstrip('/')}{API_PREFIX}/auth/yandex/callback"
 
 
-def authorize_url(frontend_redirect: str) -> str:
+def implicit_url(frontend_callback: str, next_path: str) -> str:
+    """Ссылка на согласие для implicit-потока.
+
+    Яндекс вернёт токен прямо на фронт во фрагменте адреса. Секрет приложения не
+    нужен, поэтому этот путь работает сразу; redirect_uri обязан совпадать с тем,
+    что зарегистрирован в приложении, — отсюда адрес без параметров запроса.
+    """
+    from urllib.parse import urlencode
+    params = {
+        "response_type": "token",
+        "client_id": YANDEX_CLIENT_ID,
+        "redirect_uri": frontend_callback,
+        "state": next_path,
+    }
+    return f"{YANDEX_AUTHORIZE_URL}?{urlencode(params)}"
+
+
+def authorize_url(frontend_redirect: str, next_path: str = "/dashboard") -> str:
     """Ссылка на страницу согласия. Куда вернуть пользователя — помним в state."""
     from urllib.parse import urlencode
     params = {
         "response_type": "code",
         "client_id": YANDEX_CLIENT_ID,
         "redirect_uri": callback_uri(),
-        "state": make_state(frontend_redirect),
+        "state": make_state(frontend_redirect, next_path),
         # login:info — профиль, login:email — почта для отображения в кабинете
         "scope": "login:info login:email",
         "force_confirm": "yes",
@@ -193,9 +217,35 @@ def bearer_token(authorization: str | None) -> str | None:
     return parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization
 
 
+async def adopt_yandex_token(token: str) -> tuple[User, UserSession] | None:
+    """Принять токен, выданный Яндексом напрямую (implicit-поток).
+
+    Проверяем его в Яндекс ID, заводим пользователя и сохраняем сам токен как
+    сессию: повторные запросы уже не ходят наружу.
+    """
+    try:
+        profile = await fetch_profile(token)
+    except HTTPException:
+        return None
+
+    user = upsert_user(profile)
+    with session_scope() as session:
+        if session.get(UserSession, token) is None:
+            session.add(UserSession(
+                token=token,
+                user_id=user.id,
+                expires_at=utcnow() + timedelta(hours=SESSION_TTL_HOURS),
+                yandex_token=token,
+            ))
+    return resolve_session(token)
+
+
 async def require_user(authorization: str | None = Header(default=None)) -> tuple[User, UserSession]:
-    """Зависимость FastAPI: пускает только с действующей сессией."""
-    resolved = resolve_session(bearer_token(authorization))
+    """Зависимость FastAPI: сессия сервиса либо токен Яндекс ID."""
+    token = bearer_token(authorization)
+    resolved = resolve_session(token)
+    if resolved is None and token:
+        resolved = await adopt_yandex_token(token)
     if resolved is None:
         raise HTTPException(401, {
             "code": "unauthorized",

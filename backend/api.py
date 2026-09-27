@@ -90,17 +90,33 @@ def rebuild():
 
 # ══════════════════════════════ авторизация ══════════════════════════════════
 @router.get("/auth/yandex/login")
-def yandex_login(redirect_uri: str | None = None):
-    """Начало входа. Уводит на страницу согласия Яндекс ID."""
+def yandex_login(redirect_uri: str | None = None, next: str = "/dashboard",
+                 demo: bool = False):
+    """Начало входа. Уводит на страницу согласия Яндекс ID.
+
+    Есть секрет приложения — идём надёжным code-потоком через ручку сервиса.
+    Секрета нет — implicit: Яндекс вернёт токен прямо на фронт, сервис проверит
+    его при первом же запросе. Нет и client_id — выдаём демо-сессию для стенда.
+    """
     target = redirect_uri or f"{FRONTEND_URL}/auth/callback"
 
-    if not auth.yandex_configured():
-        # Приложение в Яндекс OAuth ещё не заведено: выдаём демо-сессию,
-        # но путь пользователя остаётся тем же — через /auth/callback.
+    # ?demo=1 — вход без Яндекса для стенда и автотестов. Работает только пока
+    # разрешён ALLOW_DEMO_AUTH; на публичном стенде его выключают.
+    if demo and ALLOW_DEMO_AUTH:
         _, token = auth.demo_login()
-        return RedirectResponse(_with_token(target, token), status_code=302)
+        return RedirectResponse(_with_token(target, token, next), status_code=302)
 
-    return RedirectResponse(auth.authorize_url(target), status_code=302)
+    if auth.code_flow_available():
+        return RedirectResponse(auth.authorize_url(target, next), status_code=302)
+
+    if auth.yandex_configured():
+        # redirect_uri должен совпадать с зарегистрированным — без параметров запроса
+        callback = target.split("?")[0]
+        next_path = next if next.startswith("/") else "/dashboard"
+        return RedirectResponse(auth.implicit_url(callback, next_path), status_code=302)
+
+    _, token = auth.demo_login()
+    return RedirectResponse(_with_token(target, token, next), status_code=302)
 
 
 @router.get("/auth/yandex/callback")
@@ -120,7 +136,10 @@ async def yandex_callback(code: str | None = None, state: str | None = None,
     profile = await auth.fetch_profile(tokens["access_token"])
     user = auth.upsert_user(profile)
     session_token = auth.create_session(user, yandex_token=tokens.get("access_token"))
-    return RedirectResponse(_with_token(redirect_uri, session_token), status_code=302)
+    return RedirectResponse(
+        _with_token(redirect_uri, session_token, data.get("next", "/dashboard")),
+        status_code=302,
+    )
 
 
 @router.post("/auth/logout", status_code=204)
@@ -199,9 +218,10 @@ def get_analysis(analysis_id: str, current=Depends(auth.require_user)):
 
 
 # ══════════════════════════════ вспомогательное ══════════════════════════════
-def _with_token(redirect_uri: str, token: str) -> str:
+def _with_token(redirect_uri: str, token: str, next_path: str = "/dashboard") -> str:
+    from urllib.parse import urlencode
     separator = "&" if "?" in redirect_uri else "?"
-    return f"{redirect_uri}{separator}token={token}"
+    return f"{redirect_uri}{separator}{urlencode({'token': token, 'next': next_path})}"
 
 
 def _demo_repos(login: str) -> list[dict]:

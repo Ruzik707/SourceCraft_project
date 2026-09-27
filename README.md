@@ -39,11 +39,19 @@ uv run uvicorn main:app --port 8000       # http://localhost:8000
 динамика Score) и запуски анализа. По умолчанию это SQLite-файл `repo_health.db`;
 для Postgres достаточно поменять `DATABASE_URL`.
 
-**Авторизация через Я ID.** Заведите приложение на oauth.yandex.ru, укажите Redirect URI
-`<PUBLIC_API_URL>/api/v1/auth/yandex/callback` и права `login:info`, `login:email`, затем
-задайте `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET`. Пока их нет, вход работает в демо-режиме:
-сессия выдаётся сразу, профиль помечен `provider: demo`. На публичном стенде демо-вход
-выключается переменной `ALLOW_DEMO_AUTH=false`.
+**Авторизация через Я ID.** Работает из коробки: приложение команды на oauth.yandex.ru уже
+заведено, его `client_id` подставлен по умолчанию. Используется implicit-поток — Яндекс
+возвращает токен прямо на `/auth/callback` фронта, сервис проверяет его в Яндекс ID и
+заводит сессию. Redirect URI приложения должен точно совпадать с адресом стенда
+(сейчас `http://localhost:5173/auth/callback`).
+
+Если появится `YANDEX_CLIENT_SECRET`, сервис сам переключится на более надёжный code-поток:
+тогда в приложении нужно дополнительно зарегистрировать
+`<PUBLIC_API_URL>/api/v1/auth/yandex/callback`.
+
+Для стенда и автотестов есть вход без Яндекса: `/api/v1/auth/yandex/login?demo=1`. Он
+работает, только пока включён `ALLOW_DEMO_AUTH`; **на публичном стенде обязательно
+`ALLOW_DEMO_AUTH=false`**.
 
 **Периодический пересчёт** включён по умолчанию: APScheduler по cron из
 `REPO_HEALTH_SCHEDULE` пересобирает витрину и пишет точку в историю оценок. Ручной запуск —

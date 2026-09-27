@@ -48,9 +48,9 @@
 
 **Шаг 2. Авторизация — сделано.** `GET /auth/yandex/login` уводит на согласие Я ID,
 `/auth/yandex/callback` меняет код на токен и заводит сессию, работают `GET /me`,
-`GET /me/repos` и `POST /me/sourcecraft-token`. Осталось завести приложение на
-oauth.yandex.ru и задать `YANDEX_CLIENT_ID`/`YANDEX_CLIENT_SECRET`: пока их нет, вход идёт
-в демо-режиме.
+`GET /me/repos` и `POST /me/sourcecraft-token`. Приложение команды на oauth.yandex.ru подключено: вход идёт implicit-потоком, токен
+Яндекса проверяется сервисом и становится сессией. С появлением `YANDEX_CLIENT_SECRET`
+сервис сам переключится на code-поток.
 
 **Шаг 3. Анализ по запросу — сделано.** `POST /analyses` ставит задачу в очередь,
 `GET /analyses/{id}` отдаёт статус, прогресс и стадии. Запуски и история оценок хранятся

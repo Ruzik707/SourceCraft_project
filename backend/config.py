@@ -19,7 +19,10 @@ SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
 HISTORY_ON_REBUILD = os.getenv("HISTORY_ON_REBUILD", "true").lower() == "true"
 
 # ─────────────────────────────── авторизация ─────────────────────────────────
-YANDEX_CLIENT_ID = os.getenv("YANDEX_CLIENT_ID", "")
+# Приложение команды на oauth.yandex.ru. Client ID не секрет — он и так уходит в браузер.
+YANDEX_CLIENT_ID = os.getenv("YANDEX_CLIENT_ID", "0e306eb0e70e42fca074ede029dc9e1f")
+# Секрет включает более надёжный code-поток. Без него работает implicit:
+# Яндекс возвращает токен прямо на фронт, сервис его проверяет.
 YANDEX_CLIENT_SECRET = os.getenv("YANDEX_CLIENT_SECRET", "")
 YANDEX_AUTHORIZE_URL = os.getenv("YANDEX_AUTHORIZE_URL", "https://oauth.yandex.ru/authorize")
 YANDEX_TOKEN_URL = os.getenv("YANDEX_TOKEN_URL", "https://oauth.yandex.ru/token")

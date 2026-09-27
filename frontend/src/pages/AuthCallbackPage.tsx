@@ -15,9 +15,13 @@ export function AuthCallbackPage() {
     if (handled.current) return;
     handled.current = true;
 
-    const token = params.get('token') ?? params.get('access_token');
-    const next = params.get('next') ?? '/dashboard';
-    const err = params.get('error_description') ?? params.get('error');
+    // Яндекс в implicit-потоке возвращает токен во фрагменте адреса, а сервис
+    // при code-потоке и демо-входе — обычным параметром запроса.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const token = params.get('token') ?? hash.get('access_token');
+    const next = params.get('next') ?? hash.get('state') ?? '/dashboard';
+    const err = params.get('error_description') ?? params.get('error')
+      ?? hash.get('error_description') ?? hash.get('error');
 
     if (err) {
       setError(err);

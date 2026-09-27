@@ -90,9 +90,16 @@ export const api = {
   },
 
   /** URL, на который уводим пользователя для входа через Я ID. */
+  /**
+   * Ссылка входа. redirect_uri идёт без параметров: в приложении Яндекс OAuth
+   * зарегистрирован точный адрес, а куда вести дальше — отдельный параметр next.
+   */
   loginUrl(redirectPath: string): string {
-    const redirectUri = `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectPath)}`;
-    return `${API_BASE_URL}/auth/yandex/login${buildQuery({ redirect_uri: redirectUri })}`;
+    const redirectUri = `${window.location.origin}/auth/callback`;
+    return `${API_BASE_URL}/auth/yandex/login${buildQuery({
+      redirect_uri: redirectUri,
+      next: redirectPath,
+    })}`;
   },
 
   /** Доступна ли живая авторизация или личный кабинет работает на демо-данных. */

@@ -12,7 +12,8 @@ import logging
 
 import httpx
 
-from backend.config import HTTP_TIMEOUT, SOURCECRAFT_API, SOURCECRAFT_REPOS_PATHS
+from backend.config import (HTTP_TIMEOUT, SOURCECRAFT_API, SOURCECRAFT_AUTH_HEADER,
+                            SOURCECRAFT_AUTH_TEMPLATE, SOURCECRAFT_REPOS_PATHS)
 
 log = logging.getLogger(__name__)
 
@@ -60,9 +61,18 @@ def normalize_repo(item: dict) -> dict | None:
     }
 
 
+def auth_headers(token: str) -> dict[str, str]:
+    """Заголовок авторизации платформы. Вид задаётся настройками: точная схема
+    подбирается скриптом tools/probe_sourcecraft.py."""
+    return {
+        SOURCECRAFT_AUTH_HEADER: SOURCECRAFT_AUTH_TEMPLATE.format(t=token),
+        "Accept": "application/json",
+    }
+
+
 async def list_user_repos(token: str) -> list[dict]:
     attempts: list[str] = []
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    headers = auth_headers(token)
 
     async with httpx.AsyncClient(base_url=SOURCECRAFT_API, timeout=HTTP_TIMEOUT) as client:
         for path in SOURCECRAFT_REPOS_PATHS:

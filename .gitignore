@@ -11,3 +11,12 @@ dist/
 # системное
 .DS_Store
 *.log
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+
+# локальная база сервиса (сессии, история оценок, запуски анализа)
+repo_health.db
+*.sqlite3

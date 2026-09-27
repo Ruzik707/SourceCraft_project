@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { IS_MOCK, api, getToken, setToken } from '@/api';
+import { IS_AUTH_MOCK, api, getToken, setToken } from '@/api';
 import type { User } from '@/api/types';
 
 interface AuthState {
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     (redirectPath = '/dashboard') => {
-      if (IS_MOCK) {
+      if (IS_AUTH_MOCK) {
         // Демо-режим: настоящего редиректа в Я ID нет, но путь пользователя
         // повторяет боевой — через /auth/callback.
         window.location.assign(`/auth/callback?token=mock-yandex-id-token&next=${encodeURIComponent(redirectPath)}`);

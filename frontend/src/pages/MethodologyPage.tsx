@@ -1,25 +1,22 @@
+import { useStats } from '@/api/hooks';
+import type { CategoryKey } from '@/api/types';
 import { Card } from '@/components/ui';
 import { CATEGORY_HINT, CATEGORY_ORDER, CATEGORY_TITLE } from '@/lib/score';
 
-const WEIGHTS: Record<string, string> = {
-<<<<<<< HEAD
-  security: '19.8%',
-  code_health: '29.8%',
-  activity: '10.8%',
-  documentation: '10.0%',
-  cicd: '10.2%',
-  issues: '19.1%',
-=======
-  security: '20%',
-  code_health: '20%',
-  activity: '15%',
-  documentation: '15%',
-  cicd: '15%',
-  issues: '15%',
->>>>>>> 197896f15e8c66117be3d924797e57509bb337fe
+/** Веса подобраны Optuna; сервис отдаёт актуальные значения в GET /stats. */
+const FALLBACK_WEIGHTS: Record<CategoryKey, number> = {
+  security: 0.198,
+  code_health: 0.298,
+  activity: 0.108,
+  documentation: 0.1,
+  cicd: 0.102,
+  issues: 0.191,
 };
 
 export function MethodologyPage() {
+  const stats = useStats();
+  const weights = stats.data?.weights ?? FALLBACK_WEIGHTS;
+
   return (
     <div className="stack" style={{ gap: 'var(--space-6)', maxWidth: 900 }}>
       <header className="stack-sm">
@@ -63,8 +60,9 @@ score_категории ∈ [0; 100]  — сумма баллов её метр
         <div className="stack-sm">
           <h2>Категории и веса</h2>
           <p className="text-muted">
-            Ниже — веса методики по умолчанию. В каждом отчёте рядом с ними показан
-            эффективный вес: он пересчитывается, когда часть категорий остаётся без данных.
+            Веса подобраны на исторической выборке и приходят из сервиса. В каждом отчёте рядом с
+            ними показан эффективный вес: он пересчитывается, когда часть категорий остаётся без
+            данных.
           </p>
           <div className="table-wrap" style={{ border: 'none' }}>
             <table className="table">
@@ -81,7 +79,7 @@ score_категории ∈ [0; 100]  — сумма баллов её метр
                     <td>
                       <strong>{CATEGORY_TITLE[key]}</strong>
                     </td>
-                    <td>{WEIGHTS[key]}</td>
+                    <td>{((weights[key] ?? 0) * 100).toFixed(1)}%</td>
                     <td className="text-muted" style={{ fontSize: 13.5 }}>
                       {CATEGORY_HINT[key]}
                     </td>

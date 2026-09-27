@@ -1,7 +1,14 @@
 import pandas as pd
 
 def preprocess_data(raw_dict: dict) -> pd.DataFrame:
-    df = pd.DataFrame([raw_dict])
+    """Подготовка одной записи. Обёртка над preprocess_frame."""
+    return preprocess_frame(pd.DataFrame([raw_dict]))
+
+
+def preprocess_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Та же подготовка, но для всей выгрузки сразу: заполнение пропусков,
+    приведение дат к «сколько дней назад» и категориальных значений."""
+    df = df.copy()
 
     bool_cols = [
         'documentation.has_readme', 'documentation.has_license', 'documentation.has_contributing',

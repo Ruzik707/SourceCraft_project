@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
-import { IS_MOCK } from '@/api';
+import { IS_AUTH_MOCK, IS_MOCK } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { applyTheme, getStoredTheme, type Theme } from '@/lib/theme';
 import { Dropdown } from '@/components/ui';
@@ -161,8 +161,15 @@ export function AppShell() {
               демо-данные
             </span>
           ) : (
-            <span className="badge badge--good">боевые данные</span>
+            <span className="badge badge--good" title="Рейтинг и отчёты приходят из API сервиса">
+              боевые данные
+            </span>
           )}
+          {!IS_MOCK && IS_AUTH_MOCK ? (
+            <span className="badge badge--warn" style={{ marginLeft: 6 }} title="Я ID ещё не подключён">
+              кабинет: демо
+            </span>
+          ) : null}
           <p className="text-subtle" style={{ marginTop: 8 }}>
             Оценка здоровья открытых репозиториев SourceCraft
           </p>
@@ -218,6 +225,17 @@ export function AppShell() {
                 сентября 2026&nbsp;года (27&nbsp;761 репозиторий), Score посчитан временной формулой из
                 <span className="mono"> tools/build_mock_data.py</span>. Боевые значения приходят из витрины
                 сервиса — переключается флагом <span className="mono">VITE_DATA_SOURCE=api</span>.
+              </div>
+            </div>
+          ) : null}
+          {!IS_MOCK && IS_AUTH_MOCK ? (
+            <div className="banner no-print" style={{ marginBottom: 'var(--space-5)' }}>
+              <span aria-hidden>ⓘ</span>
+              <div>
+                Рейтинг и страницы анализа работают на боевом API сервиса. Вход через Я&nbsp;ID и
+                анализ собственного репозитория пока идут на демо-данных — они включатся, когда
+                бэкенд поднимет <span className="mono">/auth/yandex/login</span> и{' '}
+                <span className="mono">/analyses</span>.
               </div>
             </div>
           ) : null}

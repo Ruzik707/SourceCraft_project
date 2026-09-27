@@ -7,22 +7,59 @@
 
 ```
 frontend/   веб-интерфейс: рейтинг, страница анализа, личный кабинет, выгрузка отчётов
-tools/      вспомогательные скрипты (подготовка снимка данных для демо-режима фронта)
-            исходная выгрузка сборщика лежит рядом с репозиторием: ../repo_health_report.csv
+backend/    REST API, авторизация Я ID, очередь анализа, планировщик
+scoring/    методика Repo Health Score: подготовка данных, нормализация, рекомендации
+main.py     точка входа FastAPI
+tools/      подготовка снимка данных для демо-режима фронта
 docs/       сопроводительная документация
 ```
 
 Разделы сборщика данных, витрины и бэкенда добавляют их владельцы — структура выше
 не мешает положить их рядом (`collector/`, `backend/`).
 
-## Запуск интерфейса
+## Запуск
+
+### Бэкенд
+
+```bash
+uv sync                                   # зависимости из pyproject.toml
+uv run uvicorn main:app --port 8000       # http://localhost:8000
+```
+
+При старте сервис читает выгрузку сборщика (`repo_health_report.csv`), прогоняет её через
+`scoring/` и держит витрину в памяти: 27 761 репозиторий, расчёт около секунды. Проверка:
+`curl localhost:8000/health`. Пересборка витрины без перезапуска —
+`POST /api/v1/admin/rebuild`.
+
+Настройки — в `.env.example`: путь к выгрузке, строка базы, расписание пересчёта,
+приложение Яндекс OAuth, адреса SourceCraft и команда сборщика.
+
+**Нужна ли база.** Для рейтинга нет: витрина строится из выгрузки в память. База хранит то,
+что должно пережить перезапуск — сессии пользователей, историю оценок (из неё рисуется
+динамика Score) и запуски анализа. По умолчанию это SQLite-файл `repo_health.db`;
+для Postgres достаточно поменять `DATABASE_URL`.
+
+**Авторизация через Я ID.** Заведите приложение на oauth.yandex.ru, укажите Redirect URI
+`<PUBLIC_API_URL>/api/v1/auth/yandex/callback` и права `login:info`, `login:email`, затем
+задайте `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET`. Пока их нет, вход работает в демо-режиме:
+сессия выдаётся сразу, профиль помечен `provider: demo`. На публичном стенде демо-вход
+выключается переменной `ALLOW_DEMO_AUTH=false`.
+
+**Периодический пересчёт** включён по умолчанию: APScheduler по cron из
+`REPO_HEALTH_SCHEDULE` пересобирает витрину и пишет точку в историю оценок. Ручной запуск —
+`POST /api/v1/admin/rebuild`.
+
+### Интерфейс
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env     # VITE_DATA_SOURCE=mock — работает без бэкенда
+cp .env.example .env     # VITE_DATA_SOURCE=api — работает с поднятым бэкендом
 npm run dev              # http://localhost:5173
 ```
+
+Публичная часть идёт в API, личный кабинет пока на демо-данных: это задаётся отдельно,
+`VITE_AUTH_SOURCE=mock`. Чтобы показать всё без бэкенда, поставьте `VITE_DATA_SOURCE=mock`.
 
 Подробности, переменные окружения и сборка образа — в [`frontend/README.md`](./frontend/README.md).
 
@@ -33,6 +70,7 @@ npm run dev              # http://localhost:5173
 | [`frontend/README.md`](./frontend/README.md) | сборка, запуск, режим моков, выгрузка отчётов, развёртывание |
 | [`docs/frontend-architecture.md`](./docs/frontend-architecture.md) | архитектура интерфейса, обработка отсутствия данных, ограничения |
 | [`docs/status-and-integration.md`](./docs/status-and-integration.md) | что готово по критериям, что на моках, порядок подключения бэкенда |
+| [`docs/scoring-engine-requirements.md`](./docs/scoring-engine-requirements.md) | ТЗ для методики Repo Health Score: что нужно вебу и что оценивает жюри |
 | [`docs/api-contract.md`](./docs/api-contract.md) | контракт между фронтендом и бэкендом |
 | [`docs/openapi.yaml`](./docs/openapi.yaml) | то же в машиночитаемом виде |
 

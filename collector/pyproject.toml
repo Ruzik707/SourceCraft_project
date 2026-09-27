@@ -1,0 +1,24 @@
+[project]
+name = "sourcecraft-repo-health-collector"
+version = "0.1.0"
+description = "Data collector for the SourceCraft Repo Health Score hackathon project: pulls raw signals (docs, CI/CD, AppSec security, activity, issues, code health) for a repo and emits a normalized JSON record."
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+    "jsonschema>=4.20",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+# only scripts/export_csv.py needs a dataframe library, the collector itself doesn't
+export = [
+    "pandas>=2.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -44,11 +44,13 @@ PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
 
 # ─────────────────────────────── SourceCraft ─────────────────────────────────
 SOURCECRAFT_API = os.getenv("SOURCECRAFT_API", "https://api.sourcecraft.tech")
-# Путь списка репозиториев пользователя и вид заголовка авторизации.
-# Подбираются скриптом tools/probe_sourcecraft.py и подставляются сюда без правок кода.
-SOURCECRAFT_REPOS_PATHS = os.getenv(
-    "SOURCECRAFT_REPOS_PATHS", "/me/repos,/user/repos,/users/me/repos,/repos?mine=true"
-).split(",")
+# Список репозиториев пользователя. Проверено на живом API 27.09.2026:
+#   /me/repos       → 200, репозитории пользователя
+#   /user/repos     → 405, /users/me/repos → 404
+#   /repos?mine=true → 200, но отдаёт больше записей, чем у пользователя есть,
+#                      то есть параметр mine платформой не учитывается — в запасные
+#                      адреса не берём, иначе в кабинет попадут чужие проекты.
+SOURCECRAFT_REPOS_PATHS = os.getenv("SOURCECRAFT_REPOS_PATHS", "/me/repos").split(",")
 SOURCECRAFT_AUTH_HEADER = os.getenv("SOURCECRAFT_AUTH_HEADER", "Authorization")
 # Запасной токен для стенда: используется, если у сессии своего токена нет.
 # Работает только вместе с ALLOW_DEMO_AUTH — иначе все увидят репозитории его владельца.

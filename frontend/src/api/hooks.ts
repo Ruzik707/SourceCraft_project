@@ -63,7 +63,11 @@ export function useAnalysis(id: string | null) {
     queryKey: queryKeys.analysis(id ?? ''),
     queryFn: () => api.getAnalysis(id!),
     enabled: Boolean(id),
+    // 404 означает, что запуска нет: например, ссылка осталась от прошлой сессии.
+    // Повторять такой запрос бессмысленно.
+    retry: (count, error) => (error as { status?: number }).status === 404 ? false : count < 2,
     refetchInterval: (query) => {
+      if (query.state.status === 'error') return false;
       const data = query.state.data as Analysis | undefined;
       if (!data) return 1000;
       return data.status === 'queued' || data.status === 'running' ? 1000 : false;

@@ -1,3 +1,5 @@
+import { IS_MOCK } from '@/api';
+
 /** История запусков анализа в браузере: позволяет показать «прошлый прогон» и дельту Score. */
 export interface RunRecord {
   full_path: string;
@@ -14,7 +16,11 @@ const LIMIT = 40;
 export function loadRuns(): RunRecord[] {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as RunRecord[]) : [];
+    const runs = raw ? (JSON.parse(raw) as RunRecord[]) : [];
+    // Записи демо-режима остаются в браузере после переключения на боевой API,
+    // но их идентификаторов на сервере нет — отбрасываем, иначе страница
+    // анализа будет бесконечно спрашивать несуществующий запуск.
+    return IS_MOCK ? runs : runs.filter((r) => !r.analysis_id.startsWith('mock-'));
   } catch {
     return [];
   }

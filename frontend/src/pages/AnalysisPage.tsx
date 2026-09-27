@@ -83,7 +83,7 @@ export function AnalysisPage() {
   }, [analysis.data, fullPath]);
 
   const data = analysis.data;
-  const inProgress = !data || data.status === 'queued' || data.status === 'running';
+  const inProgress = !analysis.isError && (!data || data.status === 'queued' || data.status === 'running');
   const delta =
     data?.report?.score.total != null && previous?.total != null
       ? data.report.score.total - previous.total
@@ -139,6 +139,16 @@ export function AnalysisPage() {
               </div>
             </div>
           </Card>
+        ) : null}
+
+        {analysis.isError ? (
+          <Banner tone="warn" icon="⚠">
+            Этот запуск анализа не найден на сервере — скорее всего ссылка осталась от
+            прошлой сессии.{' '}
+            <button type="button" className="btn btn--sm" onClick={run}>
+              Запустить заново
+            </button>
+          </Banner>
         ) : null}
 
         {data?.status === 'failed' ? (

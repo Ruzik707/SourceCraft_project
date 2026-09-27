@@ -127,6 +127,10 @@ class Showcase:
         table["last_activity_at"] = raw.get("activity.last_commit_at")
         table["analyzed_at"] = raw.get("collection.collected_at")
         table["has_ci"] = _as_bool(raw.get("cicd.has_ci_config", pd.Series(False, index=raw.index)))
+        # Пустое значение трактуем как public: сборщик ходил по открытому каталогу,
+        # а пропуск означает недобранные метаданные, а не закрытый репозиторий.
+        table["visibility"] = raw.get("repo.visibility", pd.Series("public", index=raw.index)) \
+            .fillna("public").astype(str)
         table["total_score"] = scores["total_health_score"]
         table["coverage"] = scores["coverage"]
         table["grade"] = table["total_score"].map(_grade)
@@ -165,9 +169,13 @@ class Showcase:
     def query(self, *, query: str | None = None, language: str | None = None,
               sort: str = "score", order: str = "desc", page: int = 1, page_size: int = 25,
               has_ci: bool | None = None, security_status: str | None = None,
-              min_coverage: float | None = None) -> tuple[list[dict], int]:
+              min_coverage: float | None = None,
+              include_private: bool = False) -> tuple[list[dict], int]:
         self.ensure_ready()
         df = self.table
+        if not include_private:
+            # Публичный рейтинг — только открытые репозитории
+            df = df[df["visibility"] != "private"]
 
         if query:
             needle = query.strip().lower()
@@ -219,12 +227,13 @@ class Showcase:
 
     def languages(self) -> list[dict]:
         self.ensure_ready()
-        counts = self.table["primary_language"].fillna("—").value_counts()
+        public = self.table[self.table["visibility"] != "private"]
+        counts = public["primary_language"].fillna("—").value_counts()
         return [{"language": str(lang), "count": int(n)} for lang, n in counts.items()]
 
     def stats(self) -> dict:
         self.ensure_ready()
-        df = self.table
+        df = self.table[self.table["visibility"] != "private"]
         scored = df["total_score"].dropna()
         return {
             "repos_total": int(len(df)),

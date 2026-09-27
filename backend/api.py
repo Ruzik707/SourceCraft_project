@@ -45,7 +45,7 @@ def list_repos(
 
 
 @router.get("/repos/{owner}/{name}")
-def get_repo(owner: str, name: str):
+def get_repo(owner: str, name: str, current=Depends(auth.optional_user)):
     full_path = f"{owner}/{name}"
     row = showcase.summary_row(full_path)
     raw_row = showcase.raw_row(full_path)
@@ -54,6 +54,16 @@ def get_repo(owner: str, name: str):
             "code": "repo_not_found",
             "message": f"Репозиторий {full_path} ещё не анализировался сервисом.",
         })
+
+    # Закрытый репозиторий отдаём только его владельцу: постороннему он выглядит
+    # как несуществующий, чтобы сам факт наличия не раскрывался.
+    if str(row.get("visibility")) == "private":
+        user = current[0] if current else None
+        if user is None or user.login != owner:
+            raise HTTPException(404, {
+                "code": "repo_not_found",
+                "message": f"Репозиторий {full_path} ещё не анализировался сервисом.",
+            })
     report = presenter.to_report(row, raw_row, showcase.prepared_row(full_path))
     stored = history_for(full_path)
     if stored:

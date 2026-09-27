@@ -254,6 +254,15 @@ async def require_user(authorization: str | None = Header(default=None)) -> tupl
     return resolved
 
 
+async def optional_user(authorization: str | None = Header(default=None)):
+    """Как require_user, но без ошибки: нужна там, где страница доступна и гостю."""
+    token = bearer_token(authorization)
+    resolved = resolve_session(token)
+    if resolved is None and token:
+        resolved = await adopt_yandex_token(token)
+    return resolved
+
+
 def logout(token: str | None) -> None:
     if not token:
         return

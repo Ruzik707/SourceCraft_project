@@ -71,6 +71,8 @@ export interface Recommendation {
   evidence: Evidence[];
   /** Ожидаемый прирост итогового Repo Health Score в баллах */
   expected_gain: number;
+  /** Формулировка эффекта из методики — показывается, когда числовой прирост не задан */
+  impact?: string | null;
 }
 
 export interface CollectionError {
@@ -177,6 +179,8 @@ export interface PlatformStats {
   next_run_at: string;
   /** cron-расписание периодического пересчёта */
   schedule: string;
+  /** Веса категорий в действующей методике */
+  weights?: Partial<Record<CategoryKey, number>>;
 }
 
 export interface User {
@@ -192,6 +196,8 @@ export interface OwnedRepo extends RepoSummary {
   role: string;
   visibility: string;
   last_analysis_at: string | null;
+  /** true — список подобран сервисом: платформа не отдала репозитории пользователя */
+  demo?: boolean;
 }
 
 export type AnalysisStatus = 'queued' | 'running' | 'succeeded' | 'failed';

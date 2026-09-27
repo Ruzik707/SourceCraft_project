@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError } from '@/api';
-import { useMyRepos } from '@/api/hooks';
+import { ApiError, IS_AUTH_MOCK, api } from '@/api';
+import { queryKeys, useMyRepos } from '@/api/hooks';
 import { useAuth } from '@/auth/AuthProvider';
 import { Badge, Banner, Card, EmptyState, Skeleton } from '@/components/ui';
 import { CoverageMeter, ScorePill } from '@/components/score/ScoreBits';
@@ -13,6 +14,9 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const repos = useMyRepos(true);
   const [filter, setFilter] = useState('');
+  const [platformToken, setPlatformToken] = useState('');
+  const [savingToken, setSavingToken] = useState(false);
+  const queryClient = useQueryClient();
   const runs = loadRuns().slice(0, 6);
 
   const items = (repos.data ?? []).filter((r) =>
@@ -37,6 +41,45 @@ export function DashboardPage() {
           <button type="button" className="btn btn--sm" onClick={() => repos.refetch()}>
             Повторить
           </button>
+        </Banner>
+      ) : null}
+
+      {!IS_AUTH_MOCK && items.some((r) => r.demo) ? (
+        <Banner icon="ⓘ">
+          <div className="stack-sm">
+            <span>
+              Список подобран сервисом: платформа пока не отдала ваши репозитории по токену
+              Я&nbsp;ID. Добавьте личный токен доступа SourceCraft — он создаётся в профиле
+              платформы, хранится только в текущей сессии и удаляется при выходе.
+            </span>
+            <form
+              className="row-wrap"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!platformToken.trim()) return;
+                setSavingToken(true);
+                void api
+                  .setSourceCraftToken(platformToken.trim())
+                  .then(() => {
+                    setPlatformToken('');
+                    return queryClient.invalidateQueries({ queryKey: queryKeys.myRepos });
+                  })
+                  .finally(() => setSavingToken(false));
+              }}
+            >
+              <input
+                className="input"
+                type="password"
+                placeholder="Личный токен доступа SourceCraft"
+                value={platformToken}
+                onChange={(e) => setPlatformToken(e.target.value)}
+                style={{ minWidth: 280 }}
+              />
+              <button type="submit" className="btn" disabled={savingToken || !platformToken.trim()}>
+                {savingToken ? 'Сохраняем…' : 'Подключить'}
+              </button>
+            </form>
+          </div>
         </Banner>
       ) : null}
 

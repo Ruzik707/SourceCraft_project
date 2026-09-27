@@ -12,6 +12,15 @@ dist/
 .DS_Store
 *.log
 
-# Данные парсера (чтобы огромный датасет не улетал в GitHub)
+# python
+.venv/
+__pycache__/
+*.py[cod]
+
+# локальная база сервиса (сессии, история оценок, запуски анализа)
+repo_health.db
+*.sqlite3
+
+# данные парсера (чтобы огромный датасет не улетал в GitHub)
 repo_health_data.csv
 history.csv

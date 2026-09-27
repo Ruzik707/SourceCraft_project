@@ -61,6 +61,8 @@ export function Recommendations({ items }: { items: Recommendation[] }) {
                 <dd>
                   {rec.expected_gain > 0 ? (
                     <strong style={{ color: 'var(--good)' }}>+{rec.expected_gain.toFixed(1)} балла</strong>
+                  ) : rec.impact ? (
+                    <span className="text-muted">{rec.impact}</span>
                   ) : (
                     <span className="text-muted">
                       не влияет на Score напрямую, но снижает риск сопровождения

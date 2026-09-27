@@ -60,7 +60,62 @@ def aggregate_category_scores(df):
             df_agg[cat_score] = 50.0
     return df_agg
 
-def calculate_health_score(df: pd.DataFrame) -> dict:
+# Версия методики: попадает в ответы API и в выгруженные отчёты
+FORMULA_VERSION = "scoring-optuna-1.0"
+
+# Веса подобраны Optuna, см. scoring/notebooks/optuna_and_check.ipynb
+BEST_WEIGHTS = {
+    'w_sec': 0.198, 'w_health': 0.298, 'w_issues': 0.191,
+    'w_act': 0.108, 'w_doc': 0.100, 'w_cicd': 0.102,
+}
+
+# Соответствие внутренних ключей весов и категорий контракта API
+WEIGHT_KEY_BY_CATEGORY = {
+    'security': 'w_sec', 'code_health': 'w_health', 'issues': 'w_issues',
+    'activity': 'w_act', 'documentation': 'w_doc', 'cicd': 'w_cicd',
+}
+
+CATEGORY_STATUS_COLUMN = {
+    'security': 'collection.category_status.security',
+    'code_health': 'collection.category_status.code_health',
+    'issues': 'collection.category_status.issues',
+    'activity': 'collection.category_status.activity',
+    'documentation': 'collection.category_status.documentation',
+    'cicd': 'collection.category_status.cicd',
+}
+
+SCORE_COLUMN_BY_CATEGORY = {
+    'security': 'score_security', 'code_health': 'score_health', 'issues': 'score_issues',
+    'activity': 'score_activity', 'documentation': 'score_docs', 'cicd': 'score_cicd',
+}
+
+
+def default_active_mask(df: pd.DataFrame) -> pd.DataFrame:
+    """Какие категории участвуют в расчёте.
+
+    Логика авторская и не менялась: из знаменателя исключаются только security и
+    cicd, когда сборщик пометил их как unavailable. Остальные четыре категории
+    всегда активны.
+    """
+    mask = pd.DataFrame(index=df.index)
+    for category in WEIGHT_KEY_BY_CATEGORY:
+        column = CATEGORY_STATUS_COLUMN[category]
+        if category in ('security', 'cicd') and column in df.columns:
+            mask[category] = (df[column].fillna('') != 'unavailable').astype(int)
+        else:
+            mask[category] = 1
+    return mask
+
+
+def compute_scores_frame(df: pd.DataFrame, active_mask: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Расчёт оценок сразу по всей выгрузке.
+
+    Нормализация метрик идёт по min/max всего датасета, поэтому считать строки
+    по одной нельзя — результат зависит от выборки.
+
+    Возвращает датафрейм с оценками категорий (score_*), нормированными весами
+    (weight_<категория>), долей покрытия данными (coverage) и итогом.
+    """
     df_main = df.copy()
 
     bool_cols = [
@@ -146,46 +201,45 @@ def calculate_health_score(df: pd.DataFrame) -> dict:
     df_categories = aggregate_category_scores(df_main)
     df_main = pd.concat([df_main, df_categories], axis=1)
 
-    # Берем логическое сравнение в скобки и применяем метод Pandas .astype(int)
-    df_main['is_security_active'] = (df_main.get('collection.category_status.security', '') != 'unavailable').astype(int)
-    df_main['is_cicd_active'] = (df_main.get('collection.category_status.cicd', '') != 'unavailable').astype(int)
-    df_main['is_issues_active'] = 1
-    df_main['is_activity_active'] = 1
-    df_main['is_docs_active'] = 1
-    df_main['is_health_active'] = 1
-    BEST_WEIGHTS = {
-        'w_sec': 0.198, 'w_health': 0.298, 'w_issues': 0.191,
-        'w_act': 0.108, 'w_doc': 0.100, 'w_cicd': 0.102
-    }
 
-    temp_weights = pd.DataFrame({
-        'sec': BEST_WEIGHTS['w_sec'] * df_main['is_security_active'],
-        'health': BEST_WEIGHTS['w_health'] * df_main['is_health_active'],
-        'iss': BEST_WEIGHTS['w_issues'] * df_main['is_issues_active'],
-        'act': BEST_WEIGHTS['w_act'] * df_main['is_activity_active'],
-        'doc': BEST_WEIGHTS['w_doc'] * df_main['is_docs_active'],
-        'cicd': BEST_WEIGHTS['w_cicd'] * df_main['is_cicd_active']
-    }, index=df_main.index)
+    if active_mask is None:
+        active_mask = default_active_mask(df_main)
 
-    norm_weights = temp_weights.div(temp_weights.sum(axis=1), axis=0)
-
-    total_health_score = (
-            df_main['score_security'] * norm_weights['sec'] +
-            df_main['score_health'] * norm_weights['health'] +
-            df_main['score_issues'] * norm_weights['iss'] +
-            df_main['score_activity'] * norm_weights['act'] +
-            df_main['score_docs'] * norm_weights['doc'] +
-            df_main['score_cicd'] * norm_weights['cicd']
+    weights = pd.DataFrame(
+        {cat: BEST_WEIGHTS[key] * active_mask[cat] for cat, key in WEIGHT_KEY_BY_CATEGORY.items()},
+        index=df_main.index,
     )
+    weight_sum = weights.sum(axis=1)
+    norm_weights = weights.div(weight_sum.replace(0, pd.NA), axis=0)
 
+    total = sum(
+        df_main[SCORE_COLUMN_BY_CATEGORY[cat]] * norm_weights[cat].fillna(0)
+        for cat in WEIGHT_KEY_BY_CATEGORY
+    )
+    total = total.where(weight_sum > 0)
+
+    out = pd.DataFrame(index=df_main.index)
+    for cat, column in SCORE_COLUMN_BY_CATEGORY.items():
+        out[column] = df_main[column].round(1)
+        out[f'weight_{cat}'] = norm_weights[cat].fillna(0).round(4)
+        out[f'active_{cat}'] = active_mask[cat]
+    out['coverage'] = (weight_sum / sum(BEST_WEIGHTS.values())).round(4)
+    out['total_health_score'] = total.round(1)
+    return out
+
+
+def calculate_health_score(df: pd.DataFrame) -> dict:
+    """Оценка одной строки. Обёртка над compute_scores_frame: формат ответа прежний."""
+    scores = compute_scores_frame(df)
+    first = scores.iloc[0]
     return {
-        "total_health_score": round(total_health_score.iloc[0], 1),
+        "total_health_score": first['total_health_score'],
         "categories": {
-            "security": round(df_main['score_security'].iloc[0], 1),
-            "code_health": round(df_main['score_health'].iloc[0], 1),
-            "issues": round(df_main['score_issues'].iloc[0], 1),
-            "activity": round(df_main['score_activity'].iloc[0], 1),
-            "documentation": round(df_main['score_docs'].iloc[0], 1),
-            "cicd": round(df_main['score_cicd'].iloc[0], 1)
-        }
+            "security": first['score_security'],
+            "code_health": first['score_health'],
+            "issues": first['score_issues'],
+            "activity": first['score_activity'],
+            "documentation": first['score_docs'],
+            "cicd": first['score_cicd'],
+        },
     }

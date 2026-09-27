@@ -181,25 +181,38 @@ def set_sourcecraft_token(token: str = Body(embed=True), current=Depends(auth.re
 @router.get("/me/repos")
 async def my_repos(current=Depends(auth.require_user)):
     user, session_row = current
-    platform_token = session_row.sourcecraft_token or session_row.yandex_token
-    if not platform_token and SOURCECRAFT_FALLBACK_TOKEN and ALLOW_DEMO_AUTH:
-        # Стендовый запасной токен: удобно для демонстрации, но в проде так нельзя —
-        # иначе каждый вошедший увидит репозитории владельца токена.
-        log.warning("Используется запасной токен SourceCraft из настроек сервиса")
-        platform_token = SOURCECRAFT_FALLBACK_TOKEN
+
+    # Платформа принимает разные ключи: личный токен доступа и токен Я ID.
+    # Пробуем оба — какой сработает, тем и пользуемся.
+    candidates = [
+        ("личный токен SourceCraft", session_row.sourcecraft_token),
+        ("токен Я ID", session_row.yandex_token),
+    ]
+    if ALLOW_DEMO_AUTH and SOURCECRAFT_FALLBACK_TOKEN:
+        # Стендовый запасной ключ: в проде так нельзя — каждый вошедший увидит
+        # репозитории его владельца, поэтому только вместе с ALLOW_DEMO_AUTH.
+        candidates.append(("запасной токен из настроек", SOURCECRAFT_FALLBACK_TOKEN))
 
     repos: list[dict] = []
     demo = False
-    if platform_token:
+    failures: list[str] = []
+    for label, token in candidates:
+        if not token:
+            continue
         try:
-            repos = await list_user_repos(platform_token, login=user.login)
+            repos = await list_user_repos(token, login=user.login)
+            log.info("Репозитории получены: %s", label)
+            break
         except SourceCraftError as exc:
-            log.warning("Список репозиториев недоступен: %s | %s", exc, exc.attempts)
-            if not ALLOW_DEMO_AUTH:
-                raise HTTPException(502, {
-                    "code": "sourcecraft_unavailable",
-                    "message": f"{exc} Добавьте личный токен доступа SourceCraft в профиле.",
-                }) from exc
+            log.warning("%s не подошёл: %s | %s", label, exc, exc.attempts)
+            failures.append(f"{label}: {exc}")
+
+    if not repos and failures and not ALLOW_DEMO_AUTH:
+        raise HTTPException(502, {
+            "code": "sourcecraft_unavailable",
+            "message": "Платформа не вернула список репозиториев. "
+                       "Добавьте действующий личный токен доступа SourceCraft.",
+        })
 
     if not repos:
         repos = _demo_repos(user.login)

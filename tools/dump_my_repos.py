@@ -36,6 +36,17 @@ TOKEN = os.getenv("SOURCECRAFT_TOKEN") or (
     sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].startswith("pv1_") else "")
 HEADERS = {"Accept": "application/json"}
 
+# Схемы заголовка: личный токен платформы и токен Я ID принимаются по-разному
+AUTH_VARIANTS = [
+    ("Authorization", "Bearer {t}"),
+    ("Authorization", "OAuth {t}"),
+    ("Authorization", "Token {t}"),
+    ("Authorization", "{t}"),
+    ("X-Api-Key", "{t}"),
+    ("Private-Token", "{t}"),
+    ("X-Auth-Token", "{t}"),
+]
+
 PROFILE_PATHS = ["/me", "/user", "/profile"]
 ORG_PATHS = ["/me/organizations", "/me/orgs", "/organizations", "/orgs", "/me/groups"]
 REPO_PATHS = ["/me/repos", "/me/repositories", "/me/projects"]
@@ -73,17 +84,48 @@ def items_of(data) -> list:
     return []
 
 
+def pick_auth(client: httpx.Client) -> tuple[str, str] | None:
+    """Ищет схему заголовка, которую платформа принимает для этого токена."""
+    print("0. Подбираем схему авторизации\n")
+    for header, template in AUTH_VARIANTS:
+        try:
+            r = client.get("/me", headers={header: template.format(t=TOKEN),
+                                           "Accept": "application/json"})
+        except httpx.HTTPError as exc:
+            print(f"   ✗ {header}: {template.replace('{t}', '<токен>')} — {type(exc).__name__}")
+            continue
+        mark = "✓" if r.status_code == 200 else "·"
+        print(f"   {mark} {header}: {template.replace('{t}', '<токен>')} — {r.status_code}")
+        if r.status_code == 200:
+            return header, template
+    return None
+
+
 def main() -> int:
-    global TOKEN
+    global TOKEN, HEADERS
     if not TOKEN:
         TOKEN = _token_from_env_file()
     if not TOKEN:
         print("Не задан SOURCECRAFT_TOKEN")
         return 1
 
-    with httpx.Client(base_url=BASE, timeout=25,
-                      headers={"Authorization": f"Bearer {TOKEN}"},
+    print(f"Токен: {TOKEN[:8]}…{TOKEN[-4:]} (длина {len(TOKEN)})\n")
+
+    with httpx.Client(base_url=BASE, timeout=httpx.Timeout(20.0, connect=8.0),
                       follow_redirects=True) as client:
+        auth = pick_auth(client)
+        if auth is None:
+            print("\n   Ни одна схема не принята. Возможные причины:")
+            print("   • токен истёк или отозван — выпустите новый в профиле SourceCraft;")
+            print("   • токен скопирован не полностью;")
+            print("   • личные токены не дают доступа к этому API, и нужен токен Я ID.")
+            return 1
+        header, template = auth
+        HEADERS = {header: template.format(t=TOKEN), "Accept": "application/json"}
+        print(f"\n   Рабочая схема: {header}: {template.replace('{t}', '<токен>')}")
+        print(f"   Для .env:  SOURCECRAFT_AUTH_HEADER={header}")
+        print(f"              SOURCECRAFT_AUTH_TEMPLATE={template}\n")
+
         print("1. Кто владелец токена\n")
         profile = None
         for path in PROFILE_PATHS:

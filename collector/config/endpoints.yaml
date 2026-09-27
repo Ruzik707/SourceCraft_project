@@ -1,0 +1,242 @@
+# Endpoint registry for the SourceCraft platform REST API and the SourceCraft
+# Security (AppSec) REST API.
+#
+# Platform API entries below were confirmed on 2026-09-19 against the live,
+# public Redoc documentation at https://api.sourcecraft.tech/docs/index.html
+# (no auth needed to browse it) -- read directly in the built-in browser and
+# grepped from its full page text, not guessed from CLI examples. Where a
+# detail (e.g. an enum's full value list, or list-ordering) is inferred by
+# pattern rather than read directly, the `source` note says so.
+#
+# Security API entries are grounded in the organizer-provided SCS Backend
+# API 1.0.0 draft spec (2026-09-16) -- see the README for gaps (auth scheme
+# unconfirmed, gitRepo identifier retrieval unconfirmed).
+#
+# Placeholders in `path` (e.g. {owner}, {repo}) are filled in by
+# collector.endpoint_registry.resolve_path(). `list_key` is the field in a
+# cursor-paginated response that holds the array (response shape is always
+# `{"<list_key>": [...], "next_page_token": "string"}` -- there is no
+# page/per_page pagination on this API, and no bare-array responses).
+
+platform_api:
+  base_url_env: SOURCECRAFT_API_BASE_URL
+  default_base_url: https://api.sourcecraft.tech
+  auth: bearer_token   # Authorization: Bearer $SOURCECRAFT_TOKEN
+  token_env: SOURCECRAFT_TOKEN
+  operations:
+    get_repo:
+      method: GET
+      path: "repos/{owner}/{repo}"
+      pagination: none
+      verified: true
+      source: >
+        Confirmed via live Redoc docs, 2026-09-19 ("Get Repository").
+        Response includes description, visibility (public/internal/private),
+        default_branch, language.name, counters{forks,pull_requests,issues,
+        tags,branches}, and -- important -- an embedded aggregate
+        rating{value,percentile,reaction_counts}. Use THIS for likes/rating,
+        not get_repository_rating below. Only a single `id` field is
+        present, no separate `uuid` -- the AppSec spec's "getRepo response
+        has id and uuid fields" note does NOT clearly match this endpoint;
+        treat any use of `id` as a `gitRepo` value for the Security API as
+        an unverified guess to test empirically, not a confirmed fact.
+
+    list_repos:
+      method: GET
+      path: "repos"
+      pagination: cursor
+      list_key: repositories
+      verified: true
+      source: >
+        Confirmed via live Redoc docs, 2026-09-19. Global repository
+        listing -- candidate source for enumerating open SourceCraft repos
+        for the ranking page. Whether it takes a visibility/public query
+        filter, or just returns everything the token can see, was not
+        checked -- confirm before relying on it at scale.
+
+    list_org_repos:
+      method: GET
+      path: "orgs/{org_slug}/repos"
+      pagination: cursor
+      list_key: repositories
+      verified: true
+      source: "Confirmed via live Redoc docs, 2026-09-19."
+
+    list_issues:
+      method: GET
+      path: "repos/{owner}/{repo}/issues"
+      pagination: cursor
+      list_key: issues
+      verified: true
+      source: >
+        Confirmed via live Redoc docs, 2026-09-19. Issue objects have NO
+        `number`/`state`/`closed_at` fields (unlike GitHub). Use `slug` as
+        the per-repo identifier, `status.slug`/`status.name` for a custom
+        workflow-status histogram (status_type enum values beyond the one
+        example, "initial", weren't shown), and `completed_at != null` as
+        the "closed" signal.
+
+    list_issue_comments:
+      method: GET
+      path: "repos/{owner}/{repo}/issues/{issue_slug}/comments"
+      pagination: cursor
+      list_key: issue_comments
+      verified: true
+      source: "Confirmed via live Redoc docs, 2026-09-19."
+
+    list_pull_requests:
+      method: GET
+      path: "repos/{owner}/{repo}/pulls"
+      pagination: cursor
+      list_key: pull_requests
+      verified: true
+      source: >
+        Confirmed via live Redoc docs, 2026-09-19. PR objects have NO
+        `merged_at` field. `status` (flat string) is one of draft/open/
+        discarded/merging/merged. Merge timing is approximated from
+        `updated_at` when status == "merged" -- there is no exact
+        merge timestamp available.
+
+    list_releases:
+      method: GET
+      path: "repos/{owner}/{repo}/releases"
+      pagination: cursor
+      list_key: releases
+      verified: true
+      source: >
+        Confirmed via live Redoc docs, 2026-09-19. Field names are `tag`
+        (not tag_name) and `released_at` (not published_at); also has a
+        `status` (e.g. draft) and `is_pre_release` flag.
+
+    list_pipeline_runs:
+      method: GET
+      path: "repos/{owner}/{repo}/cicd/runs"
+      pagination: cursor
+      list_key: runs
+      verified: true
+      source: >
+        Confirmed via live Redoc docs, 2026-09-19 ("List CI Runs in
+        Repository") -- this endpoint exists, contradicting our earlier
+        (wrong) conclusion from a truncated swagger.json crawl that no
+        run-history endpoint existed. Run objects have `status` (only
+        example value seen: "created" -- full enum, e.g. success/failed
+        wording, unconfirmed) and `dates.{created_at,started_at,
+        finished_at,updated_at}`. List ordering (newest first?) unconfirmed.
+        CONFIRMED LIVE 2026-09-19 with a real PAT: this path/shape is
+        correct, but a repo being `visibility: public` does NOT grant
+        access -- got 403 AccessDenied ("permission
+        src.repositories.listCIFlux") on both a repo we don't administer
+        AND 20 unrelated random public repos. Confirmed clean (200, empty
+        `runs` list, zero errors) on our OWN team's repo, where the
+        account genuinely is a member -- so this is membership-scoped, not
+        broken or public/private-scoped. A personal PAT can't fix this by
+        picking broader repo access when creating it -- your account
+        itself isn't entitled.
+        CONFIRMED BY ORGANIZERS 2026-09-20: intentional, permanent --
+        `src.repositories.listCIFlux` is a separate permission with no
+        public-read variant; see the appsec_api block above for the full
+        answer (applies to both categories). Handle by skipping gracefully
+        (already done via category_status), not by seeking a workaround.
+
+    get_repository_rating:
+      method: GET
+      path: "repos/{owner}/{repo}/rating"
+      pagination: none
+      verified: true
+      source: >
+        Confirmed via live Redoc docs, 2026-09-19 -- but this returns the
+        CURRENT AUTHENTICATED USER's own reaction to the repo
+        ({"reaction": {"type": "none", "updated_at": ...}}), not an
+        aggregate count. Kept here for completeness; NOT used by the
+        collector -- see get_repo's embedded `rating` field instead.
+
+  # File contents (README, .sourcecraft/ci.yaml, etc.) are read via a plain
+  # git clone in collector.git_client instead of a REST "contents" endpoint --
+  # that always works and needs no bespoke path to guess at. (The live docs
+  # do expose GET /repos/{org_slug}/{repo_slug}/trees, contributors, branches,
+  # tags too, as API-based alternatives -- not adopted here since the
+  # git-native path is already built, tested, and needs no token.)
+
+appsec_api:
+  base_url_env: APPSEC_API_BASE_URL
+  default_base_url: https://appsec.sourcecraft.tech
+  # CONFIRMED LIVE 2026-09-19: the same Bearer PAT used for platform_api
+  # also authenticates here (no separate AppSec-specific token needed).
+  # Authorization is scoped by repo MEMBERSHIP, not visibility -- and we now
+  # have a clean, unambiguous signal distinguishing the two failure modes:
+  #   - 403 {"error":"Insufficient permissions for identifiers=[...]"} on a
+  #     repo the account is NOT a member of (tested: a hackathon-org repo we
+  #     don't administer, plus 20 random unrelated public repos -- 100% hit
+  #     rate, `visibility: public` never helped).
+  #   - 404 {"error":"No latest scan found for repository [...]"} on our OWN
+  #     team's repo (private, but we're the actual members) -- meaning
+  #     access itself is fine there, there's just genuinely no scan yet (no
+  #     CI configured). This also confirms get_repo.id really is the right
+  #     `gitRepo` value: the API correctly resolved and looked up our ID,
+  #     it just had nothing to return.
+  # So: a personal PAT can see AppSec/CI data only for repos it's a member
+  # of, regardless of public/private.
+  #
+  # CONFIRMED BY ORGANIZERS (2026-09-20, via case moderator): this is
+  # intentional, permanent platform behavior, not a bug or a gap we're
+  # missing a workaround for. AppSec requires the `maintainer` role
+  # specifically; CI/CD requires its own separate permission
+  # (`src.repositories.listCIFlux`, matching what we saw). There is NO
+  # universal/service-level read access to these two categories for
+  # arbitrary public repos -- their own words: "для рейтинга либо нужен
+  # доступ от владельца, либо эти показатели нужно уметь пропускать, если
+  # доступа нет" (either get owner-granted access, or the scoring service
+  # must be able to skip these metrics when access isn't available).
+  # That's exactly what security.py/cicd.py already do via
+  # category_status="unavailable" + collection.errors -- no code change
+  # needed here, this was the right design from the start.
+  # Also confirmed: no separate "test repositories" list exists or is
+  # coming -- use your own repos, or mirror a public repo into your own
+  # account if you need a well-populated repo you fully control for demos.
+  auth: bearer_token
+  token_env: APPSEC_TOKEN
+  operations:
+    list_scans:
+      method: GET
+      path: "v1/scans"
+      pagination: cursor
+      list_key: data
+      verified: true
+      source: "SCS Backend API 1.0.0 draft (organizer wiki export, 2026-09-16)."
+
+    latest_scan:
+      method: GET
+      path: "v1/scans/latest"
+      pagination: none
+      verified: true
+      source: "SCS Backend API 1.0.0 draft (organizer wiki export, 2026-09-16)."
+
+    get_scan:
+      method: GET
+      path: "v1/scans/{scan_uuid}"
+      pagination: none
+      verified: true
+      source: "SCS Backend API 1.0.0 draft (organizer wiki export, 2026-09-16)."
+
+    list_defect_groups:
+      method: GET
+      path: "v1/defect-groups"
+      pagination: cursor
+      list_key: data
+      verified: true
+      source: "SCS Backend API 1.0.0 draft (organizer wiki export, 2026-09-16)."
+
+    get_defect_group:
+      method: GET
+      path: "v1/defect-groups/{public_id}"
+      pagination: none
+      verified: true
+      source: "SCS Backend API 1.0.0 draft (organizer wiki export, 2026-09-16)."
+
+    list_findings:
+      method: GET
+      path: "v1/findings"
+      pagination: cursor
+      list_key: data
+      verified: true
+      source: "SCS Backend API 1.0.0 draft (organizer wiki export, 2026-09-16)."

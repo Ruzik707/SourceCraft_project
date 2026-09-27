@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/repo_health.schema.json",
+  "title": "RepoHealthRawRecord",
+  "description": "One raw-data snapshot for a single SourceCraft repository, produced by the Data Collector. This is INPUT to the scoring service, not the score itself: category blocks carry facts and counts, not a 0-100 number. Any field can be null when the underlying source was unavailable for this run -- always check collection.category_status before trusting a category block.",
+  "type": "object",
+  "required": ["schema_version", "repo", "collection", "documentation", "cicd", "security", "activity", "issues", "code_health"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+
+    "repo": {
+      "type": "object",
+      "description": "Repository identity and metadata. Fields here are facts, not signals -- they don't feed the score directly.",
+      "required": ["owner", "name", "full_path", "clone_url"],
+      "additionalProperties": false,
+      "properties": {
+        "platform_id": { "type": ["string", "null"], "description": "SourceCraft internal gitRepo ID or public UUID, when known." },
+        "owner": { "type": "string" },
+        "name": { "type": "string" },
+        "full_path": { "type": "string", "description": "e.g. 'owner/name'." },
+        "url": { "type": ["string", "null"], "format": "uri" },
+        "clone_url": { "type": "string" },
+        "description": { "type": ["string", "null"] },
+        "visibility": { "type": ["string", "null"], "enum": ["public", "internal", "private", null] },
+        "default_branch": { "type": ["string", "null"] },
+        "primary_language": { "type": ["string", "null"] },
+        "languages": {
+          "type": ["object", "null"],
+          "description": "language name -> share of bytes, 0..1",
+          "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+        },
+        "topics": { "type": "array", "items": { "type": "string" } },
+        "created_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+
+    "collection": {
+      "type": "object",
+      "description": "Metadata about THIS collection run: what succeeded, what didn't, and why. This is what lets downstream consumers (scoring service, dashboard) tell 'repo is unhealthy' apart from 'we couldn't reach a data source'.",
+      "required": ["collected_at", "collector_version", "duration_ms", "category_status", "errors"],
+      "additionalProperties": false,
+      "properties": {
+        "collected_at": { "type": "string", "format": "date-time" },
+        "collector_version": { "type": "string" },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "sources_used": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "git_clone": { "type": "boolean" },
+            "platform_api": { "type": "boolean" },
+            "platform_cli": { "type": "boolean" },
+            "appsec_api": { "type": "boolean" }
+          }
+        },
+        "category_status": {
+          "type": "object",
+          "description": "'ok' = fully collected, 'partial' = some fields missing, 'unavailable' = source unreachable/unauthorized, 'not_applicable' = e.g. security add-on not needed for this repo.",
+          "required": ["documentation", "cicd", "security", "activity", "issues", "code_health"],
+          "additionalProperties": false,
+          "properties": {
+            "documentation": { "$ref": "#/$defs/categoryStatus" },
+            "cicd": { "$ref": "#/$defs/categoryStatus" },
+            "security": { "$ref": "#/$defs/categoryStatus" },
+            "activity": { "$ref": "#/$defs/categoryStatus" },
+            "issues": { "$ref": "#/$defs/categoryStatus" },
+            "code_health": { "$ref": "#/$defs/categoryStatus" }
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["category", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "category": { "type": "string" },
+              "source": { "type": ["string", "null"], "description": "e.g. 'platform_api', 'appsec_api', 'git'" },
+              "code": { "type": ["string", "null"] },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "documentation": {
+      "type": "object",
+      "description": "Git-native: cloned repo tree inspected directly, no platform API needed.",
+      "additionalProperties": false,
+      "properties": {
+        "has_readme": { "type": ["boolean", "null"] },
+        "readme_length_chars": { "type": ["integer", "null"], "minimum": 0 },
+        "readme_has_sections": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "description": "Which of [installation, usage, license, contributing, api] were heuristically detected as headings."
+        },
+        "has_license": { "type": ["boolean", "null"] },
+        "license_type": { "type": ["string", "null"] },
+        "has_contributing": { "type": ["boolean", "null"] },
+        "has_code_of_conduct": { "type": ["boolean", "null"] },
+        "has_changelog": { "type": ["boolean", "null"] },
+        "has_docs_dir": { "type": ["boolean", "null"] },
+        "docs_file_count": { "type": ["integer", "null"], "minimum": 0 },
+        "has_issue_templates": { "type": ["boolean", "null"] },
+        "has_pr_template": { "type": ["boolean", "null"] },
+        "last_readme_change_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+
+    "cicd": {
+      "type": "object",
+      "description": "Config presence is git-native (reads .sourcecraft/ci.yaml from the clone). Run-history fields are platform-API-sourced and MAY be null with pipeline_history_available=false if that endpoint isn't reachable yet -- see config/endpoints.yaml (list_pipeline_runs, verified:false).",
+      "additionalProperties": false,
+      "properties": {
+        "has_ci_config": { "type": ["boolean", "null"] },
+        "ci_config_path": { "type": ["string", "null"] },
+        "declared_stage_count": { "type": ["integer", "null"], "minimum": 0 },
+        "has_test_stage": { "type": ["boolean", "null"] },
+        "has_lint_or_security_stage": { "type": ["boolean", "null"] },
+        "has_deploy_stage": { "type": ["boolean", "null"] },
+        "pipeline_history_available": { "type": "boolean" },
+        "runs_30d": { "type": ["integer", "null"], "minimum": 0 },
+        "success_rate_30d": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "median_duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+        "last_run_status": { "type": ["string", "null"] },
+        "last_run_at": { "type": ["string", "null"], "format": "date-time" },
+        "branch_protection_enabled": { "type": ["boolean", "null"] }
+      }
+    },
+
+    "security": {
+      "type": "object",
+      "description": "Sourced from the SourceCraft Security (AppSec) API. For public repos, scan results are available without connecting the Security Add-on, per organizer guidance (2026-09-19). String enum values (severity, status, scan type) are passed through as returned by the API; the draft spec explicitly warns the *numeric* forms of status/severity are undocumented, so we never touch those.",
+      "additionalProperties": false,
+      "properties": {
+        "appsec_available": { "type": "boolean", "description": "false when the AppSec API was unreachable/unauthorized/not applicable for this repo." },
+        "latest_scan": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "scan_uuid": { "type": "string" },
+            "status": { "type": ["string", "null"] },
+            "scan_type": { "type": ["string", "null"], "description": "e.g. SCAN_TYPE_DEFAULT (CI) or SCAN_TYPE_AUDIT." },
+            "finished_at": { "type": ["string", "null"], "format": "date-time" }
+          }
+        },
+        "defect_groups_by_severity": {
+          "type": ["object", "null"],
+          "description": "severity string (as returned by the API, e.g. CRITICAL/HIGH/MEDIUM/LOW) -> count of currently open defect groups.",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "defect_groups_by_engine_type": {
+          "type": ["object", "null"],
+          "description": "e.g. SAST/SCA/SECRETS/DAST -> count.",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "defect_groups_by_status": {
+          "type": ["object", "null"],
+          "description": "Raw status string (as returned by the API, e.g. RESOLVED_FP) -> count. The draft spec does not enumerate the full status list, so we pass through whatever strings the API gives us rather than assume which ones mean 'open'.",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "open_defect_groups_total": {
+          "type": ["integer", "null"], "minimum": 0,
+          "description": "Heuristic: count of groups whose status does NOT contain 'RESOLVED'. Cross-check against defect_groups_by_status once the full status enum is confirmed."
+        },
+        "resolved_false_positive_total": { "type": ["integer", "null"], "minimum": 0 },
+        "oldest_open_defect_group_age_days": { "type": ["number", "null"], "minimum": 0 },
+        "has_security_policy": { "type": ["boolean", "null"], "description": "git-native: SECURITY.md presence in the clone." }
+      }
+    },
+
+    "activity": {
+      "type": "object",
+      "description": "Git-native (commit graph of the shallow clone) plus platform-API pull/merge-request stats.",
+      "additionalProperties": false,
+      "properties": {
+        "commits_30d": { "type": ["integer", "null"], "minimum": 0 },
+        "commits_90d": { "type": ["integer", "null"], "minimum": 0 },
+        "commits_365d": { "type": ["integer", "null"], "minimum": 0 },
+        "last_commit_at": { "type": ["string", "null"], "format": "date-time" },
+        "contributors_365d": { "type": ["integer", "null"], "minimum": 0 },
+        "bus_factor_top1_share_365d": {
+          "type": ["number", "null"], "minimum": 0, "maximum": 1,
+          "description": "Share of commits_365d authored by the single most active contributor -- a simple concentration-risk proxy, not a full bus-factor model."
+        },
+        "branch_count": { "type": ["integer", "null"], "minimum": 0 },
+        "tag_count": { "type": ["integer", "null"], "minimum": 0 },
+        "pull_requests": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "open": { "type": ["integer", "null"], "minimum": 0 },
+            "merged_90d": { "type": ["integer", "null"], "minimum": 0 },
+            "avg_merge_time_hours": { "type": ["number", "null"], "minimum": 0 },
+            "stale_open_count": { "type": ["integer", "null"], "minimum": 0, "description": "open > 30d with no activity." }
+          }
+        },
+        "releases": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "count": { "type": ["integer", "null"], "minimum": 0 },
+            "last_release_at": { "type": ["string", "null"], "format": "date-time" },
+            "median_interval_days": { "type": ["number", "null"], "minimum": 0 },
+            "uses_semver": { "type": ["boolean", "null"] }
+          }
+        },
+        "likes": {
+          "type": ["object", "null"],
+          "description": "Aggregate repo rating, sourced from get_repo's embedded `rating` field (confirmed 2026-09-19 against the live Redoc docs -- NOT the `.../rating` sub-resource, which is the current user's own reaction). `value` is SourceCraft's own composite rating score (based on user reactions -- 👍/❤️/💎, weighted low/medium/high -- plus other unpublished factors); observed range so far is roughly 0-100+ (e.g. 0, 54.5), exact scale/derivation is not documented, do not assume it's normalized. `percentile` is a PERCENTAGE NUMBER on a 0-100 scale (e.g. 2 means top 2%), not a 0-1 fraction -- corrected 2026-09-20 after a real repo returned percentile=2 and failed schema validation against an earlier (wrong) assumption of a 0-1 fraction; matches the doc wording literally ('рейтинг составляет 15%' = the field holds 15, not 0.15). It is also INVERTED versus normal percentile intuition: per sourcecraft.dev/portal/docs/ru/ (Опенсорс > Рейтинг и реакции), LOWER percentile = BETTER/higher-ranked repo (percentile 2 is near the very top, not the bottom). The field is entirely absent from get_repo's response for repos with zero reactions (not present as null) -- code and schema both treat that as `percentile: null`.",
+          "additionalProperties": false,
+          "properties": {
+            "value": { "type": ["number", "null"] },
+            "percentile": { "type": ["number", "null"], "minimum": 0, "maximum": 100, "description": "0-100 scale (percentage points), lower is better -- see parent description." },
+            "source": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+
+    "issues": {
+      "type": "object",
+      "description": "Platform-API-sourced (repos/{owner}/{repo}/issues and comments).",
+      "additionalProperties": false,
+      "properties": {
+        "open_count": { "type": ["integer", "null"], "minimum": 0 },
+        "opened_90d": { "type": ["integer", "null"], "minimum": 0 },
+        "closed_90d": { "type": ["integer", "null"], "minimum": 0 },
+        "avg_time_to_first_response_hours": { "type": ["number", "null"], "minimum": 0 },
+        "avg_time_to_close_hours": { "type": ["number", "null"], "minimum": 0 },
+        "stale_open_count": { "type": ["integer", "null"], "minimum": 0, "description": "open > 30d with no response/comment." },
+        "unanswered_open_count": { "type": ["integer", "null"], "minimum": 0, "description": "open, zero maintainer comments." },
+        "labels_in_use": { "type": ["array", "null"], "items": { "type": "string" } }
+      }
+    },
+
+    "code_health": {
+      "type": "object",
+      "description": "Git-native static scan of the cloned working tree (no execution, no third-party linters -- that's AppSec's job).",
+      "additionalProperties": false,
+      "properties": {
+        "file_count": { "type": ["integer", "null"], "minimum": 0 },
+        "lines_of_code_estimate": { "type": ["integer", "null"], "minimum": 0 },
+        "todo_count": { "type": ["integer", "null"], "minimum": 0 },
+        "fixme_count": { "type": ["integer", "null"], "minimum": 0 },
+        "hack_count": { "type": ["integer", "null"], "minimum": 0 },
+        "todo_density_per_kloc": { "type": ["number", "null"], "minimum": 0 },
+        "oldest_todo_age_days": { "type": ["number", "null"], "minimum": 0, "description": "best-effort, via git blame on matched lines; omitted when too slow for repo size." },
+        "largest_file_lines": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    }
+  },
+
+  "$defs": {
+    "categoryStatus": {
+      "type": "string",
+      "enum": ["ok", "partial", "unavailable", "not_applicable"]
+    }
+  }
+}

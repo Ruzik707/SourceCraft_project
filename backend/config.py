@@ -72,15 +72,16 @@ SOURCECRAFT_API = os.getenv("SOURCECRAFT_API", "https://api.sourcecraft.tech")
 #                      то есть параметр mine платформой не учитывается — в запасные
 #                      адреса не берём, иначе в кабинет попадут чужие проекты.
 SOURCECRAFT_REPOS_PATHS = os.getenv("SOURCECRAFT_REPOS_PATHS", "/me/repos").split(",")
-# Организации пользователя и их репозитории: «мои проекты» на платформе лежат
-# именно там, а /me/repos отдаёт в том числе просто доступные и недавние.
+# Адреса проверены на живом API 27.09.2026 скриптом tools/dump_my_repos.py.
+# Профиль лежит на /user (на /me платформа отвечает 404).
+SOURCECRAFT_PROFILE_PATH = os.getenv("SOURCECRAFT_PROFILE_PATH", "/user")
 # Только адреса в области пользователя. Глобальные списки вроде /organizations
 # сюда добавлять нельзя: сервис уйдёт собирать чужие репозитории.
-SOURCECRAFT_ORG_PATHS = os.getenv(
-    "SOURCECRAFT_ORG_PATHS", "/me/organizations,/me/orgs"
-).split(",")
+# /me/orgs → 200; /me/organizations отвечает 405
+SOURCECRAFT_ORG_PATHS = os.getenv("SOURCECRAFT_ORG_PATHS", "/me/orgs").split(",")
+# /orgs/{slug}/repos → 200; /organizations/{slug}/repos отвечает 404
 SOURCECRAFT_ORG_REPOS_TEMPLATES = os.getenv(
-    "SOURCECRAFT_ORG_REPOS_TEMPLATES", "/orgs/{slug}/repos,/organizations/{slug}/repos"
+    "SOURCECRAFT_ORG_REPOS_TEMPLATES", "/orgs/{slug}/repos"
 ).split(",")
 
 SOURCECRAFT_AUTH_HEADER = os.getenv("SOURCECRAFT_AUTH_HEADER", "Authorization")

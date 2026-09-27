@@ -1,10 +1,16 @@
 """
-Клиент SourceCraft: список репозиториев, доступных авторизованному пользователю.
+Клиент SourceCraft: профиль пользователя, его организации и репозитории.
 
-Точный путь ручки в документации платформы может отличаться, поэтому адреса
-перечислены в SOURCECRAFT_REPOS_PATHS и пробуются по очереди — первый успешный
-ответ и используется. Ошибка возвращается текстом, чтобы было видно, что именно
-ответила платформа.
+Форматы проверены на живом API 27.09.2026 (tools/dump_my_repos.py):
+
+    Authorization: Bearer <личный токен доступа>
+    GET /user                  → профиль: {id, username, display_name, ...}
+    GET /me/orgs               → {"organizations": [{slug, display_name, visibility}]}
+    GET /orgs/{slug}/repos     → {"repositories": [...], "next_page_token": "..."}
+
+Важно: /me/repos отдаёт не все репозитории пользователя — в выдаче были только
+проекты одной организации, а личные отсутствовали. Поэтому список собирается по
+организациям, а /me/repos добавляется как дополнительный источник.
 """
 from __future__ import annotations
 
@@ -14,14 +20,13 @@ import httpx
 
 from backend.config import (HTTP_TIMEOUT, SOURCECRAFT_API, SOURCECRAFT_AUTH_HEADER,
                             SOURCECRAFT_AUTH_TEMPLATE, SOURCECRAFT_ORG_PATHS,
-                            SOURCECRAFT_ORG_REPOS_TEMPLATES, SOURCECRAFT_REPOS_PATHS)
+                            SOURCECRAFT_ORG_REPOS_TEMPLATES, SOURCECRAFT_PROFILE_PATH,
+                            SOURCECRAFT_REPOS_PATHS)
 
 log = logging.getLogger(__name__)
 
-LIST_KEYS = ("items", "repositories", "repos", "organizations", "orgs", "data", "results")
-
-# Роли, при которых репозиторий считается своим, а не просто доступным
-OWNER_ROLES = {"owner", "admin", "maintainer", "administrator"}
+PAGE_SIZE = 100
+MAX_PAGES = 20
 
 
 class SourceCraftError(RuntimeError):
@@ -30,139 +35,174 @@ class SourceCraftError(RuntimeError):
         self.attempts = attempts or []
 
 
-def _extract_items(payload) -> list[dict]:
-    if isinstance(payload, list):
-        return [x for x in payload if isinstance(x, dict)]
-    if isinstance(payload, dict):
-        for key in LIST_KEYS:
-            value = payload.get(key)
-            if isinstance(value, list):
-                return [x for x in value if isinstance(x, dict)]
-    return []
-
-
-def normalize_repo(item: dict) -> dict | None:
-    """Приводит ответ платформы к тому, что ждёт интерфейс."""
-    full_path = item.get("full_path") or item.get("fullPath") or item.get("path")
-
-    # 1. Ищем владельца и имя с учетом ключа slug
-    org = item.get("organization") or {}
-    owner = item.get("owner") or org.get("slug") or org.get("name")
-    name = item.get("name") or item.get("slug") or item.get("repo")
-
-    if not full_path and owner and name:
-        full_path = f"{owner}/{name}"
-    if not full_path:
-        return None
-    if not owner or not name:
-        owner, _, name = full_path.partition("/")
-
-    # 2. ИСПРАВЛЕНИЕ: Защита от объекта в поле языка (чтобы React не падал)
-    lang_raw = item.get("primary_language") or item.get("language")
-    if isinstance(lang_raw, dict):
-        primary_language = lang_raw.get("name")
-    else:
-        primary_language = lang_raw
-
-    return {
-        "full_path": full_path,
-        "owner": owner,
-        "name": name,
-        "id": str(item.get("id") or item.get("uuid") or full_path),
-        "url": item.get("url") or f"https://sourcecraft.dev/{full_path}",
-        "description": item.get("description"),
-        "primary_language": primary_language,
-        "visibility": item.get("visibility") or ("private" if item.get("is_private") else "public"),
-        "role": item.get("role") or item.get("permission") or "member",
-    }
-
-
 def auth_headers(token: str) -> dict[str, str]:
-    """Заголовок авторизации платформы. Вид задаётся настройками: точная схема
-    подбирается скриптом tools/probe_sourcecraft.py."""
+    """Заголовок авторизации платформы; вид задаётся настройками."""
     return {
         SOURCECRAFT_AUTH_HEADER: SOURCECRAFT_AUTH_TEMPLATE.format(t=token),
         "Accept": "application/json",
     }
 
 
-async def _get_items(client: httpx.AsyncClient, path: str, headers: dict,
-                     attempts: list[str]) -> list[dict]:
+def _items(payload, *keys: str) -> list[dict]:
+    if isinstance(payload, list):
+        return [x for x in payload if isinstance(x, dict)]
+    if isinstance(payload, dict):
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [x for x in value if isinstance(x, dict)]
+    return []
+
+
+def normalize_repo(item: dict, org_slug: str | None = None) -> dict | None:
+    """Ответ платформы → структура, которую ждёт интерфейс.
+
+    Платформа не отдаёт full_path: путь собирается из slug организации и slug
+    репозитория. Языка в ответе тоже нет — он берётся из витрины, если
+    репозиторий уже анализировался.
+    """
+    org = item.get("organization") or {}
+    owner = org.get("slug") or org.get("name") or org_slug or item.get("owner")
+    name = item.get("slug") or item.get("name")
+    full_path = item.get("full_path") or (f"{owner}/{name}" if owner and name else None)
+    if not full_path:
+        return None
+    if not owner or not name:
+        owner, _, name = full_path.partition("/")
+
+    language = item.get("primary_language") or item.get("language")
+    if isinstance(language, dict):
+        language = language.get("name")
+
+    rating = item.get("rating") or {}
+    return {
+        "full_path": full_path,
+        "owner": owner,
+        "name": name,
+        "id": str(item.get("id") or full_path),
+        "url": item.get("web_url") or item.get("url") or f"https://sourcecraft.dev/{full_path}",
+        "description": item.get("description") or None,
+        "primary_language": language,
+        "visibility": item.get("visibility") or ("private" if item.get("is_private") else "public"),
+        "likes": float(rating.get("value") or 0),
+        "is_empty": bool(item.get("is_empty")),
+        "default_branch": item.get("default_branch") or None,
+        "organization": owner,
+    }
+
+
+async def _get(client: httpx.AsyncClient, path: str, headers: dict,
+               attempts: list[str], params: dict | None = None):
     try:
-        response = await client.get(path, headers=headers)
+        response = await client.get(path, headers=headers, params=params)
     except httpx.HTTPError as exc:
-        attempts.append(f"{path}: {exc}")
-        return []
+        attempts.append(f"{path}: {type(exc).__name__}")
+        return None
     if response.status_code != 200:
-        attempts.append(f"{path}: {response.status_code} {response.text[:120]}")
-        return []
+        attempts.append(f"{path}: {response.status_code}")
+        return None
     try:
-        return _extract_items(response.json())
+        return response.json()
     except ValueError:
-        attempts.append(f"{path}: 200, но ответ не JSON")
-        return []
+        attempts.append(f"{path}: ответ не JSON")
+        return None
 
 
-async def _org_slugs(client: httpx.AsyncClient, headers: dict, attempts: list[str]) -> list[str]:
-    slugs: list[str] = []
+async def _paged(client: httpx.AsyncClient, path: str, headers: dict,
+                 attempts: list[str]) -> list[dict]:
+    """Постраничный обход: платформа отдаёт next_page_token."""
+    collected: list[dict] = []
+    token = ""
+    for _ in range(MAX_PAGES):
+        params = {"page_size": PAGE_SIZE}
+        if token:
+            params["page_token"] = token
+        payload = await _get(client, path, headers, attempts, params)
+        if payload is None:
+            break
+        collected.extend(_items(payload, "repositories", "repos", "items"))
+        token = (payload or {}).get("next_page_token") or ""
+        if not token:
+            break
+    return collected
+
+
+async def fetch_profile(client: httpx.AsyncClient, headers: dict,
+                        attempts: list[str]) -> dict | None:
+    payload = await _get(client, SOURCECRAFT_PROFILE_PATH, headers, attempts)
+    return payload if isinstance(payload, dict) else None
+
+
+async def fetch_organizations(client: httpx.AsyncClient, headers: dict,
+                              attempts: list[str]) -> list[dict]:
+    orgs: list[dict] = []
+    seen: set[str] = set()
     for path in SOURCECRAFT_ORG_PATHS:
         path = path.strip()
         if not path.startswith("/me"):
-            # Защита от глобальных списков: они вернут чужие организации
-            log.warning("Адрес организаций %s не в области пользователя — пропускаем", path)
+            # Глобальные списки вернут чужие организации — не берём
+            log.warning("Адрес организаций %s вне области пользователя, пропускаем", path)
             continue
-        for org in await _get_items(client, path, headers, attempts):
-            slug = org.get("slug") or org.get("name") or org.get("login")
-            if slug and str(slug) not in slugs:
-                slugs.append(str(slug))
-    return slugs
+        payload = await _get(client, path, headers, attempts)
+        for org in _items(payload, "organizations", "orgs", "items"):
+            slug = org.get("slug") or org.get("name")
+            if slug and slug not in seen:
+                seen.add(str(slug))
+                orgs.append({"slug": str(slug),
+                             "display_name": org.get("display_name") or str(slug),
+                             "visibility": org.get("visibility") or "public"})
+    return orgs
 
 
 async def list_user_repos(token: str, login: str | None = None) -> list[dict]:
-    """Репозитории пользователя.
+    """Все репозитории, доступные пользователю в SourceCraft.
 
-    Платформа отдаёт по /me/repos в том числе просто доступные и недавно открытые
-    проекты — среди них бывают чужие. Поэтому сначала собираем репозитории
-    организаций пользователя (это и есть «его» проекты), а список доступных
-    добавляем следом и помечаем, чтобы в кабинете было видно, что это не своё.
+    Собираются по его организациям; личная организация идёт первой.
     """
     attempts: list[str] = []
     headers = auth_headers(token)
     collected: dict[str, dict] = {}
 
-    async with httpx.AsyncClient(base_url=SOURCECRAFT_API, timeout=HTTP_TIMEOUT) as client:
-        for slug in await _org_slugs(client, headers, attempts):
-            for template in SOURCECRAFT_ORG_REPOS_TEMPLATES:
-                items = await _get_items(client, template.strip().format(slug=slug),
-                                         headers, attempts)
-                for raw in items:
-                    repo = normalize_repo(raw)
-                    if repo:
-                        # Организация получена из области пользователя, значит проект его
-                        repo["source"] = "organization"
-                        collected.setdefault(repo["full_path"], repo)
-                if items:
-                    log.info("Организация %s: %s репозиториев", slug, len(items))
-                    break
+    async with httpx.AsyncClient(base_url=SOURCECRAFT_API,
+                                 timeout=httpx.Timeout(HTTP_TIMEOUT, connect=25.0)) as client:
+        profile = await fetch_profile(client, headers, attempts)
+        username = (profile or {}).get("username") or login
 
-        for path in SOURCECRAFT_REPOS_PATHS:
-            for raw in await _get_items(client, path.strip(), headers, attempts):
-                repo = normalize_repo(raw)
-                if not repo:
+        organizations = await fetch_organizations(client, headers, attempts)
+        log.info("Организации пользователя: %s",
+                 ", ".join(o["slug"] for o in organizations) or "не найдены")
+
+        for org in organizations:
+            for template in SOURCECRAFT_ORG_REPOS_TEMPLATES:
+                items = await _paged(client, template.strip().format(slug=org["slug"]),
+                                     headers, attempts)
+                if not items:
                     continue
-                own = (login and repo["owner"] == login) or \
-                    str(repo.get("role", "")).lower() in OWNER_ROLES
-                repo["source"] = "organization" if own else "accessible"
-                collected.setdefault(repo["full_path"], repo)
+                for raw in items:
+                    repo = normalize_repo(raw, org_slug=org["slug"])
+                    if repo:
+                        repo["source"] = "organization"
+                        repo["organization_name"] = org["display_name"]
+                        repo["role"] = "личная организация" if org["slug"] == username else "участник"
+                        collected.setdefault(repo["full_path"], repo)
+                log.info("Организация %s: %s репозиториев", org["slug"], len(items))
+                break
+
+        # Дополнительный источник: платформа может вернуть здесь то, чего нет в организациях
+        for path in SOURCECRAFT_REPOS_PATHS:
+            for raw in await _paged(client, path.strip(), headers, attempts):
+                repo = normalize_repo(raw)
+                if repo:
+                    repo.setdefault("source", "organization")
+                    repo.setdefault("role", "участник")
+                    collected.setdefault(repo["full_path"], repo)
 
     if not collected:
         raise SourceCraftError(
-            "Платформа не вернула список репозиториев ни по одному из известных адресов.",
-            attempts,
-        )
+            "Платформа не вернула ни одного репозитория.", attempts)
 
     repos = list(collected.values())
-    repos.sort(key=lambda r: (r.get("source") != "organization", r["full_path"]))
-    log.info("Итого репозиториев пользователя: %s (своих: %s)",
-             len(repos), sum(1 for r in repos if r.get("source") == "organization"))
+    # Личные проекты первыми, дальше по алфавиту
+    repos.sort(key=lambda r: (r["owner"] != username, r["full_path"]))
+    log.info("Итого репозиториев пользователя: %s", len(repos))
     return repos

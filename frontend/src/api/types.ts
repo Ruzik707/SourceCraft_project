@@ -200,6 +200,10 @@ export interface OwnedRepo extends RepoSummary {
   demo?: boolean;
   /** organization — репозиторий пользователя, accessible — просто доступный ему */
   source?: 'organization' | 'accessible';
+  /** Название организации, которой принадлежит репозиторий */
+  organization_name?: string | null;
+  /** Репозиторий пуст: анализировать нечего */
+  is_empty?: boolean;
 }
 
 export type AnalysisStatus = 'queued' | 'running' | 'succeeded' | 'failed';

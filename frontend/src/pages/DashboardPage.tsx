@@ -160,7 +160,12 @@ export function DashboardPage() {
                   <Badge tone={repo.visibility === 'private' ? 'warn' : 'neutral'}>
                     {repo.visibility === 'private' ? 'приватный' : 'публичный'}
                   </Badge>
-                  <Badge tone="neutral">{repo.role}</Badge>
+                  {repo.role ? <Badge tone="neutral">{repo.role}</Badge> : null}
+                  {repo.is_empty ? (
+                    <Badge tone="warn" title="В репозитории нет кода — анализировать нечего">
+                      пустой
+                    </Badge>
+                  ) : null}
                   {repo.source === 'accessible' ? (
                     <Badge tone="warn" title="Репозиторий не ваш: платформа отдала его как доступный или недавно открытый">
                       доступный
@@ -172,6 +177,7 @@ export function DashboardPage() {
                   {repo.description ?? 'без описания'}
                 </span>
                 <span className="text-subtle">
+                  {repo.organization_name ? `${repo.organization_name} · ` : ''}
                   Последний анализ:{' '}
                   {repo.last_analysis_at ? formatDateTime(repo.last_analysis_at) : 'не выполнялся'}
                 </span>
@@ -185,6 +191,8 @@ export function DashboardPage() {
                 <button
                   type="button"
                   className="btn"
+                  disabled={repo.is_empty}
+                  title={repo.is_empty ? 'В репозитории нет кода' : undefined}
                   onClick={() => navigate(`/dashboard/analyze/${repo.full_path}`)}
                 >
                   {repo.last_analysis_at ? 'Пересчитать' : 'Анализировать'}

@@ -287,12 +287,17 @@ def _own_repo(repo: dict, demo: bool) -> dict:
     row = showcase.summary_row(repo["full_path"])
     if row is not None:
         summary = presenter.to_summary(row)
+        # Описание и язык в витрине могут быть старше, чем на платформе
+        summary["description"] = repo.get("description") or summary.get("description")
+        summary["primary_language"] = summary.get("primary_language") or repo.get("primary_language")
     else:
+        # Репозиторий ещё не анализировался: показываем то, что известно платформе
         summary = {
             "id": repo.get("id") or repo["full_path"],
             "full_path": repo["full_path"], "owner": repo.get("owner"), "name": repo.get("name"),
             "url": repo.get("url"), "description": repo.get("description"),
-            "primary_language": repo.get("primary_language"), "likes": 0,
+            "primary_language": repo.get("primary_language"),
+            "likes": repo.get("likes", 0),
             "last_activity_at": None, "analyzed_at": None, "total_score": None,
             "grade": "—", "coverage": 0.0, "categories": {}, "no_data_categories": [],
             "not_applicable_categories": [], "has_ci": False, "security_status": "no_data",
@@ -300,10 +305,12 @@ def _own_repo(repo: dict, demo: bool) -> dict:
         }
     return {
         **summary,
-        "role": repo.get("role", "member"),
+        "role": repo.get("role", "участник"),
+        # Видимость берём с платформы: она свежее снимка
         "visibility": repo.get("visibility", "public"),
         "last_analysis_at": summary.get("analyzed_at"),
         "demo": demo,
-        # organization — репозиторий пользователя, accessible — просто доступный ему
         "source": repo.get("source", "organization"),
+        "organization_name": repo.get("organization_name"),
+        "is_empty": repo.get("is_empty", False),
     }

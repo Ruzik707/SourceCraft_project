@@ -40,14 +40,26 @@ def _extract_items(payload) -> list[dict]:
 def normalize_repo(item: dict) -> dict | None:
     """Приводит ответ платформы к тому, что ждёт интерфейс."""
     full_path = item.get("full_path") or item.get("fullPath") or item.get("path")
-    owner = item.get("owner") or (item.get("organization") or {}).get("name")
-    name = item.get("name") or item.get("repo")
+
+    # 1. Ищем владельца и имя с учетом ключа slug
+    org = item.get("organization") or {}
+    owner = item.get("owner") or org.get("slug") or org.get("name")
+    name = item.get("name") or item.get("slug") or item.get("repo")
+
     if not full_path and owner and name:
         full_path = f"{owner}/{name}"
     if not full_path:
         return None
     if not owner or not name:
         owner, _, name = full_path.partition("/")
+
+    # 2. ИСПРАВЛЕНИЕ: Защита от объекта в поле языка (чтобы React не падал)
+    lang_raw = item.get("primary_language") or item.get("language")
+    if isinstance(lang_raw, dict):
+        primary_language = lang_raw.get("name")
+    else:
+        primary_language = lang_raw
+
     return {
         "full_path": full_path,
         "owner": owner,
@@ -55,7 +67,7 @@ def normalize_repo(item: dict) -> dict | None:
         "id": str(item.get("id") or item.get("uuid") or full_path),
         "url": item.get("url") or f"https://sourcecraft.dev/{full_path}",
         "description": item.get("description"),
-        "primary_language": item.get("primary_language") or item.get("language"),
+        "primary_language": primary_language,
         "visibility": item.get("visibility") or ("private" if item.get("is_private") else "public"),
         "role": item.get("role") or item.get("permission") or "member",
     }

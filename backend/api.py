@@ -192,7 +192,7 @@ async def my_repos(current=Depends(auth.require_user)):
     demo = False
     if platform_token:
         try:
-            repos = await list_user_repos(platform_token)
+            repos = await list_user_repos(platform_token, login=user.login)
         except SourceCraftError as exc:
             log.warning("Список репозиториев недоступен: %s | %s", exc, exc.attempts)
             if not ALLOW_DEMO_AUTH:
@@ -291,4 +291,6 @@ def _own_repo(repo: dict, demo: bool) -> dict:
         "visibility": repo.get("visibility", "public"),
         "last_analysis_at": summary.get("analyzed_at"),
         "demo": demo,
+        # organization — репозиторий пользователя, accessible — просто доступный ему
+        "source": repo.get("source", "organization"),
     }

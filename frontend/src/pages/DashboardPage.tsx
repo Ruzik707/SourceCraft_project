@@ -14,14 +14,19 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const repos = useMyRepos(true);
   const [filter, setFilter] = useState('');
+  const [onlyMine, setOnlyMine] = useState(true);
   const [platformToken, setPlatformToken] = useState('');
   const [savingToken, setSavingToken] = useState(false);
   const queryClient = useQueryClient();
   const runs = loadRuns().slice(0, 6);
 
-  const items = (repos.data ?? []).filter((r) =>
-    filter ? r.full_path.toLowerCase().includes(filter.toLowerCase()) : true,
-  );
+  const all = repos.data ?? [];
+  const hasOwn = all.some((r) => r.source !== 'accessible');
+  const accessibleCount = all.filter((r) => r.source === 'accessible').length;
+  const items = all.filter((r) => {
+    if (onlyMine && hasOwn && r.source === 'accessible') return false;
+    return filter ? r.full_path.toLowerCase().includes(filter.toLowerCase()) : true;
+  });
 
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
@@ -108,13 +113,25 @@ export function DashboardPage() {
           <span className="text-muted">
             {repos.isLoading ? 'Загружаем список…' : `Доступно ${formatNumber(items.length)} репозиториев`}
           </span>
-          <input
-            className="input"
-            placeholder="Фильтр по названию"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            style={{ maxWidth: 260 }}
-          />
+          <span className="row-wrap">
+            {accessibleCount > 0 && hasOwn ? (
+              <label className="checkbox" title="Платформа отдаёт и просто доступные вам проекты">
+                <input
+                  type="checkbox"
+                  checked={onlyMine}
+                  onChange={(e) => setOnlyMine(e.target.checked)}
+                />
+                Только мои ({accessibleCount} доступных скрыто)
+              </label>
+            ) : null}
+            <input
+              className="input"
+              placeholder="Фильтр по названию"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              style={{ maxWidth: 260 }}
+            />
+          </span>
         </div>
 
         {repos.isLoading ? (
@@ -144,6 +161,11 @@ export function DashboardPage() {
                     {repo.visibility === 'private' ? 'приватный' : 'публичный'}
                   </Badge>
                   <Badge tone="neutral">{repo.role}</Badge>
+                  {repo.source === 'accessible' ? (
+                    <Badge tone="warn" title="Репозиторий не ваш: платформа отдала его как доступный или недавно открытый">
+                      доступный
+                    </Badge>
+                  ) : null}
                   {repo.primary_language ? <Badge tone="neutral">{repo.primary_language}</Badge> : null}
                 </div>
                 <span className="text-subtle">

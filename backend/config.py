@@ -51,6 +51,15 @@ SOURCECRAFT_API = os.getenv("SOURCECRAFT_API", "https://api.sourcecraft.tech")
 #                      то есть параметр mine платформой не учитывается — в запасные
 #                      адреса не берём, иначе в кабинет попадут чужие проекты.
 SOURCECRAFT_REPOS_PATHS = os.getenv("SOURCECRAFT_REPOS_PATHS", "/me/repos").split(",")
+# Организации пользователя и их репозитории: «мои проекты» на платформе лежат
+# именно там, а /me/repos отдаёт в том числе просто доступные и недавние.
+SOURCECRAFT_ORG_PATHS = os.getenv(
+    "SOURCECRAFT_ORG_PATHS", "/me/organizations,/me/orgs,/organizations"
+).split(",")
+SOURCECRAFT_ORG_REPOS_TEMPLATES = os.getenv(
+    "SOURCECRAFT_ORG_REPOS_TEMPLATES", "/orgs/{slug}/repos,/organizations/{slug}/repos"
+).split(",")
+
 SOURCECRAFT_AUTH_HEADER = os.getenv("SOURCECRAFT_AUTH_HEADER", "Authorization")
 # Запасной токен для стенда: используется, если у сессии своего токена нет.
 # Работает только вместе с ALLOW_DEMO_AUTH — иначе все увидят репозитории его владельца.

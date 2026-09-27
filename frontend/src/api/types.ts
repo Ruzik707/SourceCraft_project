@@ -198,6 +198,8 @@ export interface OwnedRepo extends RepoSummary {
   last_analysis_at: string | null;
   /** true — список подобран сервисом: платформа не отдала репозитории пользователя */
   demo?: boolean;
+  /** organization — репозиторий пользователя, accessible — просто доступный ему */
+  source?: 'organization' | 'accessible';
 }
 
 export type AnalysisStatus = 'queued' | 'running' | 'succeeded' | 'failed';

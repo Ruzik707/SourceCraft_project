@@ -13,11 +13,15 @@ import logging
 import httpx
 
 from backend.config import (HTTP_TIMEOUT, SOURCECRAFT_API, SOURCECRAFT_AUTH_HEADER,
-                            SOURCECRAFT_AUTH_TEMPLATE, SOURCECRAFT_REPOS_PATHS)
+                            SOURCECRAFT_AUTH_TEMPLATE, SOURCECRAFT_ORG_PATHS,
+                            SOURCECRAFT_ORG_REPOS_TEMPLATES, SOURCECRAFT_REPOS_PATHS)
 
 log = logging.getLogger(__name__)
 
-LIST_KEYS = ("items", "repositories", "repos", "data", "results")
+LIST_KEYS = ("items", "repositories", "repos", "organizations", "orgs", "data", "results")
+
+# Роли, при которых репозиторий считается своим, а не просто доступным
+OWNER_ROLES = {"owner", "admin", "maintainer", "administrator"}
 
 
 class SourceCraftError(RuntimeError):
@@ -82,32 +86,77 @@ def auth_headers(token: str) -> dict[str, str]:
     }
 
 
-async def list_user_repos(token: str) -> list[dict]:
+async def _get_items(client: httpx.AsyncClient, path: str, headers: dict,
+                     attempts: list[str]) -> list[dict]:
+    try:
+        response = await client.get(path, headers=headers)
+    except httpx.HTTPError as exc:
+        attempts.append(f"{path}: {exc}")
+        return []
+    if response.status_code != 200:
+        attempts.append(f"{path}: {response.status_code} {response.text[:120]}")
+        return []
+    try:
+        return _extract_items(response.json())
+    except ValueError:
+        attempts.append(f"{path}: 200, но ответ не JSON")
+        return []
+
+
+async def _org_slugs(client: httpx.AsyncClient, headers: dict, attempts: list[str]) -> list[str]:
+    slugs: list[str] = []
+    for path in SOURCECRAFT_ORG_PATHS:
+        for org in await _get_items(client, path.strip(), headers, attempts):
+            slug = org.get("slug") or org.get("name") or org.get("login")
+            if slug and str(slug) not in slugs:
+                slugs.append(str(slug))
+    return slugs
+
+
+async def list_user_repos(token: str, login: str | None = None) -> list[dict]:
+    """Репозитории пользователя.
+
+    Платформа отдаёт по /me/repos в том числе просто доступные и недавно открытые
+    проекты — среди них бывают чужие. Поэтому сначала собираем репозитории
+    организаций пользователя (это и есть «его» проекты), а список доступных
+    добавляем следом и помечаем, чтобы в кабинете было видно, что это не своё.
+    """
     attempts: list[str] = []
     headers = auth_headers(token)
+    collected: dict[str, dict] = {}
 
     async with httpx.AsyncClient(base_url=SOURCECRAFT_API, timeout=HTTP_TIMEOUT) as client:
-        for path in SOURCECRAFT_REPOS_PATHS:
-            path = path.strip()
-            if not path:
-                continue
-            try:
-                response = await client.get(path, headers=headers)
-            except httpx.HTTPError as exc:
-                attempts.append(f"{path}: {exc}")
-                continue
-
-            if response.status_code == 200:
-                items = [normalize_repo(x) for x in _extract_items(response.json())]
-                items = [x for x in items if x]
+        for slug in await _org_slugs(client, headers, attempts):
+            for template in SOURCECRAFT_ORG_REPOS_TEMPLATES:
+                items = await _get_items(client, template.strip().format(slug=slug),
+                                         headers, attempts)
+                for raw in items:
+                    repo = normalize_repo(raw)
+                    if repo:
+                        repo["source"] = "organization"
+                        collected.setdefault(repo["full_path"], repo)
                 if items:
-                    log.info("Репозитории пользователя получены с %s: %s шт.", path, len(items))
-                    return items
-                attempts.append(f"{path}: 200, но список пуст")
-            else:
-                attempts.append(f"{path}: {response.status_code} {response.text[:120]}")
+                    log.info("Организация %s: %s репозиториев", slug, len(items))
+                    break
 
-    raise SourceCraftError(
-        "Платформа не вернула список репозиториев ни по одному из известных адресов.",
-        attempts,
-    )
+        for path in SOURCECRAFT_REPOS_PATHS:
+            for raw in await _get_items(client, path.strip(), headers, attempts):
+                repo = normalize_repo(raw)
+                if not repo:
+                    continue
+                own = (login and repo["owner"] == login) or \
+                    str(repo.get("role", "")).lower() in OWNER_ROLES
+                repo["source"] = "organization" if own else "accessible"
+                collected.setdefault(repo["full_path"], repo)
+
+    if not collected:
+        raise SourceCraftError(
+            "Платформа не вернула список репозиториев ни по одному из известных адресов.",
+            attempts,
+        )
+
+    repos = list(collected.values())
+    repos.sort(key=lambda r: (r.get("source") != "organization", r["full_path"]))
+    log.info("Итого репозиториев пользователя: %s (своих: %s)",
+             len(repos), sum(1 for r in repos if r.get("source") == "organization"))
+    return repos

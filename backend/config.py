@@ -4,6 +4,27 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _load_env_file(path: Path) -> None:
+    """Читает .env в переменные окружения.
+
+    Уже заданные переменные не перезаписываются: то, что передали при запуске,
+    всегда важнее файла.
+    """
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_env_file(BASE_DIR / ".env")
+
 # ─────────────────────────────── данные ──────────────────────────────────────
 # Выгрузка сборщика. Витрина строится из неё в память: для рейтинга база не нужна.
 CSV_PATH = Path(os.getenv("REPO_HEALTH_CSV", BASE_DIR / "repo_health_report.csv"))
@@ -53,8 +74,10 @@ SOURCECRAFT_API = os.getenv("SOURCECRAFT_API", "https://api.sourcecraft.tech")
 SOURCECRAFT_REPOS_PATHS = os.getenv("SOURCECRAFT_REPOS_PATHS", "/me/repos").split(",")
 # Организации пользователя и их репозитории: «мои проекты» на платформе лежат
 # именно там, а /me/repos отдаёт в том числе просто доступные и недавние.
+# Только адреса в области пользователя. Глобальные списки вроде /organizations
+# сюда добавлять нельзя: сервис уйдёт собирать чужие репозитории.
 SOURCECRAFT_ORG_PATHS = os.getenv(
-    "SOURCECRAFT_ORG_PATHS", "/me/organizations,/me/orgs,/organizations"
+    "SOURCECRAFT_ORG_PATHS", "/me/organizations,/me/orgs"
 ).split(",")
 SOURCECRAFT_ORG_REPOS_TEMPLATES = os.getenv(
     "SOURCECRAFT_ORG_REPOS_TEMPLATES", "/orgs/{slug}/repos,/organizations/{slug}/repos"

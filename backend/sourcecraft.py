@@ -106,7 +106,12 @@ async def _get_items(client: httpx.AsyncClient, path: str, headers: dict,
 async def _org_slugs(client: httpx.AsyncClient, headers: dict, attempts: list[str]) -> list[str]:
     slugs: list[str] = []
     for path in SOURCECRAFT_ORG_PATHS:
-        for org in await _get_items(client, path.strip(), headers, attempts):
+        path = path.strip()
+        if not path.startswith("/me"):
+            # Защита от глобальных списков: они вернут чужие организации
+            log.warning("Адрес организаций %s не в области пользователя — пропускаем", path)
+            continue
+        for org in await _get_items(client, path, headers, attempts):
             slug = org.get("slug") or org.get("name") or org.get("login")
             if slug and str(slug) not in slugs:
                 slugs.append(str(slug))
@@ -133,6 +138,7 @@ async def list_user_repos(token: str, login: str | None = None) -> list[dict]:
                 for raw in items:
                     repo = normalize_repo(raw)
                     if repo:
+                        # Организация получена из области пользователя, значит проект его
                         repo["source"] = "organization"
                         collected.setdefault(repo["full_path"], repo)
                 if items:

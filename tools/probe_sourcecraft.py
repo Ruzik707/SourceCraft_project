@@ -21,8 +21,23 @@ import sys
 
 import httpx
 
+
+def _token_from_env_file() -> str:
+    """Берёт токен из .env, если переменная окружения не задана."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if not os.path.exists(env_path):
+        return ""
+    with open(env_path, encoding="utf-8") as fh:
+        for line in fh:
+            key, _, value = line.strip().partition("=")
+            if key.strip() == "SOURCECRAFT_TOKEN":
+                return value.strip().strip('"').strip("'")
+    return ""
+
+
 BASE = os.getenv("SOURCECRAFT_API", "https://api.sourcecraft.tech")
-TOKEN = os.getenv("SOURCECRAFT_TOKEN") or (sys.argv[1] if len(sys.argv) > 1 else "")
+TOKEN = os.getenv("SOURCECRAFT_TOKEN") or (
+    sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].startswith("pv1_") else "")
 
 # Схемы авторизации: точный вид заголовка платформа нигде явно не описывает
 AUTH_VARIANTS = [
@@ -57,6 +72,9 @@ def probe(client: httpx.Client, path: str, header: str, template: str) -> tuple[
 
 
 def main() -> int:
+    global TOKEN
+    if not TOKEN:
+        TOKEN = _token_from_env_file()
     if not TOKEN:
         print("Не задан SOURCECRAFT_TOKEN (переменная окружения или первый аргумент)")
         return 1

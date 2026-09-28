@@ -75,7 +75,7 @@ COLLECTOR_COMMAND=uv run --project collector --extra export python collector/scr
 COLLECTOR_TIMEOUT=900
 ```
 
-**3. Запуск анализа.** Поднять бэкенд (`uv run uvicorn main:app --port 8000`), войти и
+**3. Запуск анализа.** Поднять сервис из корня проекта (`./run.sh`), войти и
 поставить анализ. На стенде можно взять демо-вход (работает при `ALLOW_DEMO_AUTH=true`):
 
 ```bash

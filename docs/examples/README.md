@@ -42,9 +42,9 @@
 ## Как воспроизвести
 
 ```bash
-docker compose up -d --build
+./run.sh
 
-# отчёт в Markdown — из интерфейса кнопкой «Выгрузить отчёт»
+# отчёт в Markdown — из интерфейса (http://localhost:5173) кнопкой «Выгрузить отчёт»
 # или напрямую из API:
 curl -s http://localhost:8000/api/v1/repos/userver/userver | jq .
 ```

@@ -28,6 +28,10 @@ cd case-18-repo-health-score-team-31
 сгенерирует `SECRET_KEY`, освободит занятые порты, дождётся готовности витрины и поднимет
 интерфейс на http://localhost:5173. Остановка — Ctrl+C, оба процесса гасятся вместе.
 
+Кроме Node и `uv` скрипт использует `curl`, `lsof` и `openssl` — на macOS и в большинстве
+Linux они уже есть. Файл `frontend/.env` скрипт перезаписывает при каждом запуске под
+выбранный режим. Логи: `/tmp/repo-health-api.log` и `/tmp/repo-health-web.log`.
+
 ```bash
 ./run.sh --mock     # только интерфейс на снимке данных, бэкенд не нужен
 ./run.sh --stop     # погасить процессы от прошлого запуска
@@ -142,7 +146,8 @@ cp collector/.env.example collector/.env   # вписать SOURCECRAFT_TOKEN
 **Автономный.** Если бэкенд не поднят, интерфейс работает на снимке:
 
 ```bash
-cd frontend && VITE_DATA_SOURCE=mock npm run dev
+./run.sh --mock
+# или вручную: cd frontend && VITE_DATA_SOURCE=mock npm run dev
 ```
 
 В этом режиме доступны рейтинг, страницы анализа, отчёты, сравнение и эмуляция
@@ -231,11 +236,12 @@ curl -s localhost:8000/api/v1/repos/userver/userver | head -c 200
 
 | Симптом | Причина и что делать |
 | --- | --- |
-| `Address already in use` на 8000 | уже запущен другой экземпляр: `pkill -f "uvicorn main:app"` |
+| `Address already in use` на 8000 | уже запущен другой экземпляр: `./run.sh --stop` (при запуске через `./run.sh` порты освобождаются сами) |
+| `./run.sh` пишет «Бэкенд не поднялся» | скрипт выводит хвост лога; полностью — `/tmp/repo-health-api.log` |
 | В кабинете подобранная выборка вместо своих репозиториев | нет действующего токена платформы: вставьте личный токен в поле на странице «Мои репозитории» или задайте `SOURCECRAFT_TOKEN` |
 | `ConnectTimeout` при обращении к платформе | нет доступа к `api.sourcecraft.tech`: проверьте сеть и VPN |
 | `401` от платформы на все адреса | токен истёк или скопирован не полностью: выпустите новый в профиле SourceCraft |
-| Интерфейс показывает демо-баннер | в `frontend/.env` стоит `VITE_DATA_SOURCE=mock` |
+| Интерфейс показывает демо-баннер | в `frontend/.env` стоит `VITE_DATA_SOURCE=mock` — например, после `./run.sh --mock`; обычный `./run.sh` вернёт `api` |
 | `TLS handshake timeout` при сборке образов | недоступен Docker Hub: повторите команду или соберите через зеркало — `REGISTRY=cr.yandex/mirror docker compose up -d --build` |
 | Вход через Я ID возвращает не туда | `PUBLIC_API_URL` и `FRONTEND_URL` в `.env` должны указывать на тот адрес, по которому вы открываете сервис |
 | `Repo Health Score` не считается у части репозиториев | сборщик не смог получить рабочую копию: смотрите блок «Полнота данных» на странице анализа |

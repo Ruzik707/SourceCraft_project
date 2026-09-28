@@ -69,37 +69,6 @@ paths:
               schema: { $ref: '#/components/schemas/RepoReport' }
         '404': { $ref: '#/components/responses/Error' }
 
-  /repos/{owner}/{name}/report.{format}:
-    get:
-      tags: [repos]
-      summary: Выгрузка отчёта файлом (необязательный эндпоинт)
-      parameters:
-        - { in: path, name: owner, required: true, schema: { type: string } }
-        - { in: path, name: name, required: true, schema: { type: string } }
-        - in: path
-          name: format
-          required: true
-          schema: { type: string, enum: [md, pdf] }
-      responses:
-        '200':
-          description: Файл отчёта
-          content:
-            text/markdown: { schema: { type: string } }
-            application/pdf: { schema: { type: string, format: binary } }
-
-  /badge/{owner}/{name}.svg:
-    get:
-      tags: [repos]
-      summary: SVG-бейдж Repo Health Score для README
-      parameters:
-        - { in: path, name: owner, required: true, schema: { type: string } }
-        - { in: path, name: name, required: true, schema: { type: string } }
-      responses:
-        '200':
-          description: Бейдж
-          content:
-            image/svg+xml: { schema: { type: string } }
-
   /languages:
     get:
       tags: [rating]
@@ -214,6 +183,63 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Analysis' }
         '404': { $ref: '#/components/responses/Error' }
+
+  /auth/yandex/callback:
+    get:
+      tags: [auth]
+      summary: Возврат от Яндекс ID (code-поток)
+      description: >
+        Используется, когда задан YANDEX_CLIENT_SECRET. В implicit-потоке Яндекс
+        возвращает токен напрямую на /auth/callback фронтенда, минуя эту ручку.
+      parameters:
+        - { in: query, name: code, schema: { type: string } }
+        - { in: query, name: state, schema: { type: string } }
+        - { in: query, name: error, schema: { type: string } }
+      responses:
+        '302': { description: Редирект на фронтенд с токеном сессии }
+
+  /me/sourcecraft-token:
+    post:
+      tags: [auth]
+      summary: Сохранить личный токен доступа SourceCraft в сессии
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '204': { description: Токен сохранён }
+
+  /me/analyses:
+    get:
+      tags: [analyses]
+      summary: Последние запуски анализа пользователя
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Список запусков без отчётов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Analysis' }
+
+  /admin/rebuild:
+    post:
+      tags: [rating]
+      summary: Пересобрать витрину из выгрузки сборщика
+      description: Ручной запуск того, что планировщик делает по расписанию.
+      responses:
+        '200':
+          description: Витрина пересобрана
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformStats' }
 
 components:
   securitySchemes:

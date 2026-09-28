@@ -9,7 +9,7 @@
 ```bash
 cd frontend
 npm install
-cp .env.example .env     # по умолчанию VITE_DATA_SOURCE=mock — фронт работает без бэкенда
+cp .env.example .env     # по умолчанию VITE_DATA_SOURCE=api — нужен поднятый бэкенд
 npm run dev              # http://localhost:5173
 ```
 
@@ -27,17 +27,19 @@ npm run typecheck        # только проверка типов
 
 | Переменная | Значения | Назначение |
 | --- | --- | --- |
-| `VITE_DATA_SOURCE` | `mock` \| `api` | откуда брать данные: снимок в `public/mock` или реальный бэкенд |
+| `VITE_DATA_SOURCE` | `api` \| `mock` | боевой бэкенд или снимок в `public/mock` |
+| `VITE_AUTH_SOURCE` | `api` \| `mock` | то же отдельно для личного кабинета |
 | `VITE_API_BASE_URL` | строка | базовый путь API, по умолчанию `/api/v1` |
 | `VITE_PROXY_TARGET` | URL | куда Vite проксирует `/api` в режиме разработки |
 
-Переменные читаются на этапе сборки. Чтобы демонстрационный стенд ходил в настоящий API:
+Переменные читаются на этапе сборки: после изменения нужен перезапуск `npm run dev`.
+Чтобы показать интерфейс без поднятого бэкенда:
 
 ```bash
-VITE_DATA_SOURCE=api VITE_API_BASE_URL=/api/v1 npm run build
+VITE_DATA_SOURCE=mock npm run dev
 ```
 
-## Режим моков
+## Автономный режим
 
 `VITE_DATA_SOURCE=mock` включает транспорт `src/api/mock.ts`: он отдаёт те же структуры,
 что и бэкенд, но читает подготовленный снимок данных из `public/mock`. В этом режиме
@@ -47,9 +49,8 @@ VITE_DATA_SOURCE=api VITE_API_BASE_URL=/api/v1 npm run build
 Снимок собирается из сырой выгрузки сборщика:
 
 ```bash
-# CSV лежит рядом с репозиторием, в папке проекта
 python3 tools/build_mock_data.py \
-  --csv ../repo_health_report.csv \
+  --csv repo_health_report.csv \
   --out frontend/public/mock \
   --limit 1500          # сколько репозиториев положить в рейтинг
 ```

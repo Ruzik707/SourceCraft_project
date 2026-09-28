@@ -57,6 +57,9 @@ repo_health_report.csv   выгрузка сборщика, из неё стро
 | [`docs/build-and-run.md`](./docs/build-and-run.md) | сборка, запуск, переменные окружения, стенд, типичные проблемы |
 | [`docs/deploy.md`](./docs/deploy.md) | демонстрационный стенд: публичный URL, HTTPS, обновление данных |
 | [`docs/architecture.md`](./docs/architecture.md) | архитектура решения, потоки данных, масштабирование, защита данных |
+| [`docs/methodology.md`](./docs/methodology.md) | методика расчёта Repo Health Score |
+| [`docs/roadmap.md`](./docs/roadmap.md) | что готово и план развития до финальной версии |
+| [`docs/examples/`](./docs/examples/) | примеры веб-отчётов и выгрузок на реальных репозиториях |
 | [`docs/value.md`](./docs/value.md) | польза для пользователей и для платформы SourceCraft |
 | [`docs/api-contract.md`](./docs/api-contract.md) | описание API и форматов ответов |
 | [`docs/openapi.yaml`](./docs/openapi.yaml) | то же машиночитаемо |

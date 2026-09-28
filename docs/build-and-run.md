@@ -14,12 +14,28 @@
 
 Отдельное оборудование не нужно: сервис работает как веб-приложение в браузере.
 
-## Быстрый старт
+## Запуск одной командой
+
+Для проверки решения достаточно Docker: бэкенд и интерфейс поднимаются вместе, всё
+доступно на одном адресе.
 
 ```bash
 git clone ssh://ssh.sourcecraft.dev/lct-hackaton-2026/case-18-repo-health-score-team-31.git
 cd case-18-repo-health-score-team-31
 
+cp .env.example .env        # задать SECRET_KEY
+docker compose up -d --build
+docker compose logs -f backend   # дождаться строки «Витрина готова»
+```
+
+Откройте http://localhost:8080.
+
+## Режим разработки
+
+Когда нужна горячая перезагрузка интерфейса, части запускаются по отдельности —
+тогда Node и Python нужны на самой машине.
+
+```bash
 # бэкенд
 uv sync
 cp .env.example .env
@@ -32,7 +48,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Откройте http://localhost:5173.
+Откройте http://localhost:5173. Запросы к `/api` Vite проксирует на бэкенд.
 
 При старте бэкенд читает выгрузку `repo_health_report.csv` (27 761 репозиторий),
 прогоняет её через методику из `scoring/` и держит витрину в памяти. Расчёт занимает

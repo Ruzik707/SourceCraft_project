@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/public/mock
+collector/.venv
+collector/.workdir
+collector/output
+repo_health.db
+*.log
+.env

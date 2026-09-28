@@ -55,6 +55,7 @@ repo_health_report.csv   выгрузка сборщика, из неё стро
 | Документ | О чём |
 | --- | --- |
 | [`docs/build-and-run.md`](./docs/build-and-run.md) | сборка, запуск, переменные окружения, стенд, типичные проблемы |
+| [`docs/deploy.md`](./docs/deploy.md) | демонстрационный стенд: публичный URL, HTTPS, обновление данных |
 | [`docs/architecture.md`](./docs/architecture.md) | архитектура решения, потоки данных, масштабирование, защита данных |
 | [`docs/value.md`](./docs/value.md) | польза для пользователей и для платформы SourceCraft |
 | [`docs/api-contract.md`](./docs/api-contract.md) | описание API и форматов ответов |

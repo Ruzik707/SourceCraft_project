@@ -156,19 +156,18 @@ uv run --extra export python scripts/export_csv.py ../repo_health_report.csv
 curl -X POST http://localhost:8000/api/v1/admin/rebuild
 ```
 
-## Развёртывание стенда
+## Развёртывание
+
+Весь стенд поднимается одной командой: бэкенд и интерфейс за nginx.
 
 ```bash
-docker build -t repo-health-frontend --build-arg VITE_DATA_SOURCE=api frontend
-docker run -p 8080:80 repo-health-frontend
+cp .env.example .env      # заполнить SECRET_KEY, PUBLIC_API_URL, FRONTEND_URL
+docker compose up -d --build
 ```
 
-`frontend/nginx.conf` отдаёт интерфейс с fallback на `index.html` и проксирует `/api/`
-на бэкенд — адрес апстрима правится под стенд. Бэкенд запускается тем же
-`uvicorn main:app`, при необходимости за несколькими воркерами.
-
-Перед публикацией стенда обязательно: `ALLOW_DEMO_AUTH=false`, свой `SECRET_KEY`,
-актуальные `PUBLIC_API_URL` и `FRONTEND_URL`.
+Интерфейс и API отдаются с одного адреса: nginx отдаёт статику и проксирует `/api/` на
+бэкенд. Подробности, HTTPS, обновление данных и чек-лист перед показом — в
+[`deploy.md`](./deploy.md).
 
 ## Проверка, что всё поднялось
 

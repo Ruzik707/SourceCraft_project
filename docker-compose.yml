@@ -1,0 +1,41 @@
+# Демонстрационный стенд: бэкенд + интерфейс за nginx.
+#
+#   cp .env.example .env     # заполнить SECRET_KEY, PUBLIC_API_URL, FRONTEND_URL
+#   docker compose up -d --build
+#
+# Интерфейс и API доступны на одном адресе: nginx отдаёт статику и проксирует /api/.
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    environment:
+      # Адреса стенда: из них строится ссылка возврата после входа через Я ID
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      SECRET_KEY: ${SECRET_KEY:?задайте SECRET_KEY в .env}
+      # На публичном стенде демо-вход обязательно выключен
+      ALLOW_DEMO_AUTH: ${ALLOW_DEMO_AUTH:-false}
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+      REPO_HEALTH_SCHEDULE: ${REPO_HEALTH_SCHEDULE:-0 3 * * *}
+    volumes:
+      # Выгрузка сборщика: обновляется снаружи, сервис перечитывает по расписанию
+      - ./repo_health_report.csv:/data/repo_health_report.csv:ro
+      # Сессии, история оценок, запуски анализа
+      - stand-data:/data
+    expose:
+      - "8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_DATA_SOURCE: api
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${STAND_PORT:-8080}:80"
+
+volumes:
+  stand-data:

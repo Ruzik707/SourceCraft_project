@@ -1,0 +1,44 @@
+on:
+  push:
+    - workflows: [repo-health-checks]
+      filter:
+        branches: [main]
+  pull_request:
+    - workflows: [repo-health-checks]
+      filter:
+        target_branches: [main]
+
+workflows:
+  repo-health-checks:
+    tasks:
+      # Бэкенд: зависимости ставятся по uv.lock. Образ 3.12 — pyproject требует
+      # именно эту версию, на 3.11 uv sync упадёт.
+      - name: backend-check
+        cubes:
+          - name: python-setup
+            image: python:3.12
+            script:
+              - pip install uv
+              - uv sync
+              - uv run python -c "import main; print('Бэкенд импортируется')"
+
+      # Сборщик данных — единственная часть, покрытая тестами (18 штук)
+      - name: collector-tests
+        cubes:
+          - name: pytest
+            image: python:3.12
+            script:
+              - pip install uv
+              - cd collector
+              - uv sync --extra dev
+              - uv run pytest -q
+
+      - name: frontend-build
+        cubes:
+          - name: node-setup
+            image: node:20
+            script:
+              - cd frontend
+              - npm ci
+              - npm run typecheck
+              - npm run build

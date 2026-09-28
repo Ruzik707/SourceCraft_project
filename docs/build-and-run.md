@@ -30,6 +30,14 @@ docker compose logs -f backend   # дождаться строки «Витри�
 
 Откройте http://localhost:8080.
 
+**Если сборка падает на `TLS handshake timeout` или `failed to fetch anonymous token`** —
+недоступен Docker Hub. Сначала просто повторите команду, это часто разовый сбой. Если не
+помогает, соберите через зеркало Яндекса:
+
+```bash
+REGISTRY=cr.yandex/mirror docker compose up -d --build
+```
+
 ## Режим разработки
 
 Когда нужна горячая перезагрузка интерфейса, части запускаются по отдельности —
@@ -208,4 +216,6 @@ curl -s localhost:8000/api/v1/repos/userver/userver | head -c 200
 | `ConnectTimeout` при обращении к платформе | нет доступа к `api.sourcecraft.tech`: проверьте сеть и VPN |
 | `401` от платформы на все адреса | токен истёк или скопирован не полностью: выпустите новый в профиле SourceCraft |
 | Интерфейс показывает демо-баннер | в `frontend/.env` стоит `VITE_DATA_SOURCE=mock` |
+| `TLS handshake timeout` при сборке образов | недоступен Docker Hub: повторите команду или соберите через зеркало — `REGISTRY=cr.yandex/mirror docker compose up -d --build` |
+| Вход через Я ID возвращает не туда | `PUBLIC_API_URL` и `FRONTEND_URL` в `.env` должны указывать на тот адрес, по которому вы открываете сервис |
 | `Repo Health Score` не считается у части репозиториев | сборщик не смог получить рабочую копию: смотрите блок «Полнота данных» на странице анализа |

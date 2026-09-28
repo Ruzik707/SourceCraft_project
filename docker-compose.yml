@@ -6,7 +6,11 @@
 # Интерфейс и API доступны на одном адресе: nginx отдаёт статику и проксирует /api/.
 services:
   backend:
-    build: .
+    build:
+      context: .
+      args:
+        # Docker Hub недоступен? REGISTRY=cr.yandex/mirror docker compose build
+        REGISTRY: ${REGISTRY:-docker.io/library}
     restart: unless-stopped
     environment:
       # Адреса стенда: из них строится ссылка возврата после входа через Я ID
@@ -31,6 +35,7 @@ services:
       context: ./frontend
       args:
         VITE_DATA_SOURCE: api
+        REGISTRY: ${REGISTRY:-docker.io/library}
     restart: unless-stopped
     depends_on:
       - backend

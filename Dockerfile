@@ -1,7 +1,10 @@
 # Бэкенд: API, методика, планировщик.
 # Сборщик данных в образ не входит — он запускается отдельно и обновляет CSV,
 # который подключается томом (см. docker-compose.yml).
-FROM python:3.12-slim AS base
+# Реестр образов вынесен в аргумент: если Docker Hub недоступен, собираем через
+# зеркало Яндекса — REGISTRY=cr.yandex/mirror
+ARG REGISTRY=docker.io/library
+FROM ${REGISTRY}/python:3.12-slim AS base
 
 # uv ставит зависимости по uv.lock — сборка воспроизводима
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv

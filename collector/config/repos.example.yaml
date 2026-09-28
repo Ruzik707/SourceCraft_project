@@ -1,0 +1,14 @@
+# Example input for `python -m collector collect-batch --repos-file ...`
+#
+# clone_url    : required, used for the git-native collectors (documentation,
+#                activity, code_health, cicd config detection).
+# owner / name : required, used to build platform REST API paths
+#                (repos/{owner}/{repo}/...).
+# gitrepo_id   : optional, the AppSec `gitRepo` query param (internal ID or
+#                public UUID). Skip the security category if omitted.
+
+repos:
+  - owner: some-org
+    name: some-public-repo
+    clone_url: https://sourcecraft.dev/some-org/some-public-repo.git
+    gitrepo_id: null

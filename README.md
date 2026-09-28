@@ -60,6 +60,7 @@ repo_health_report.csv   выгрузка сборщика, из неё стро
 | [`docs/api-contract.md`](./docs/api-contract.md) | описание API и форматов ответов |
 | [`docs/openapi.yaml`](./docs/openapi.yaml) | то же машиночитаемо |
 | [`docs/limitations.md`](./docs/limitations.md) | ограничения решения и что осталось закрыть |
+| [`docs/external-services.md`](./docs/external-services.md) | внешние сервисы, обращение с данными, использование ИИ |
 | [`collector/README.md`](./collector/README.md) | сборщик данных: запуск, порционный обход, выгрузка |
 | [`frontend/README.md`](./frontend/README.md) | интерфейс: структура, маршруты, выгрузка отчётов |
 

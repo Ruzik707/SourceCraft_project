@@ -3,6 +3,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  // Для публикации в подпапке (например, GitHub Pages) базовый путь задаётся
+  // переменной: VITE_BASE_PATH=/yandex_sourcecraft/ npm run build
+  base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [react()],
   server: {
     port: 5173,

@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from backend.config import CSV_PATH
+# from backend.config import CSV_PATH
+from pathlib import Path
 from scoring.data_loader import preprocess_frame
 from scoring.normalizer import BEST_WEIGHTS, WEIGHT_KEY_BY_CATEGORY, compute_scores_frame
 
@@ -29,6 +30,8 @@ IDENTITY_COLUMNS = [
     "collection.collected_at", "collection.collector_version",
 ]
 
+
+CSV_PATH = Path("/data/repo_health_report.csv")
 
 def _as_bool(series: pd.Series) -> pd.Series:
     if series.dtype == bool:

@@ -14,6 +14,8 @@ from backend.db import history_for, session_scope, UserSession
 from backend.scheduler import next_run_at
 from backend.sourcecraft import SourceCraftError, list_user_repos
 from backend.store import showcase
+from backend.ai_service import generate_ai_recommendations_list
+from scoring.recommender import SourceCraftRecommendationEngine
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix=API_PREFIX)
@@ -71,6 +73,86 @@ def get_repo(owner: str, name: str, current=Depends(auth.optional_user)):
         report["history"] = stored
     return report
 
+
+@router.post("/repos/{owner}/{name}/recommendations/ai")
+async def generate_ai_recommendations(owner: str, name: str, current=Depends(auth.optional_user)):
+    """Генерация ИИ-рекомендаций по кнопке из интерфейса."""
+    full_path = f"{owner}/{name}"
+
+    # Проверяем, существует ли репозиторий в базе
+    raw_row = showcase.raw_row(full_path)
+    if raw_row is None:
+        raise HTTPException(404, {
+            "code": "repo_not_found",
+            "message": f"Репозиторий {full_path} ещё не анализировался."
+        })
+
+    # Проверка приватности: закрытый проект отдаем только владельцу
+    if str(raw_row.get("visibility")) == "private":
+        user = current[0] if current else None
+        if user is None or user.login != owner:
+            raise HTTPException(404, {
+                "code": "repo_not_found",
+                "message": "Репозиторий не найден или нет доступа."
+            })
+
+    # Генерируем базовые рекомендации движком правил
+    prepared_row = showcase.prepared_row(full_path)
+    engine = SourceCraftRecommendationEngine()
+    base_recs = engine.generate_recommendations(prepared_row)
+
+    # Прогоняем факты через ИИ
+    ai_response = await generate_ai_recommendations_list(owner, name, base_recs)
+
+    # Достаем сгенерированные данные
+    ai_summary_text = ai_response.get("summary", "")
+    ai_recs_raw = ai_response.get("recommendations", base_recs)
+
+    CATEGORY_MAP = {
+        "Security": "security", "CI/CD": "cicd", "Documentation": "documentation",
+        "Issues": "issues", "Activity": "activity", "Code Health": "code_health"
+    }
+    PRIORITY_MAP = {
+        "Критический": "critical", "Высокий": "high",
+        "Средний": "medium", "Низкий": "low", "Инфо": "info"
+    }
+
+    formatted_recs = []
+    for i, rec in enumerate(ai_recs_raw):
+        raw_cat = rec.get("category", "activity")
+        category = CATEGORY_MAP.get(raw_cat, str(raw_cat).lower())
+
+        raw_prio = rec.get("priority", "medium")
+        priority = PRIORITY_MAP.get(raw_prio, str(raw_prio).lower())
+        if priority not in ["critical", "high", "medium", "low", "info"]:
+            priority = "medium"
+
+        title = rec.get("title") or rec.get("action", "Рекомендация по улучшению")
+        why = rec.get("why") or rec.get("importance", "")
+
+        if len(title) > 80:
+            title = title[:77] + "..."
+
+        formatted_recs.append({
+            "id": f"ai.{i + 1}",
+            "category": category,
+            "priority": priority,
+            "title": title,
+            "problem": rec.get("problem", ""),
+            "why": why,
+            "action": rec.get("action", ""),
+            "evidence": [{"label": "Источник", "value": "Анализ ИИ на базе метрик", "url": raw_row.get("url")}],
+            "expected_gain": 0.0,
+            "impact": rec.get("impact", "")
+        })
+
+    # Возвращаем summary вместе с рекомендациями
+    return {
+        "summary": ai_summary_text,
+        "recommendations": formatted_recs,
+        "model": "llama-3.1-8b-instant",
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
 
 @router.get("/languages")
 def list_languages():

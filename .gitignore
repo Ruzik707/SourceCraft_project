@@ -20,10 +20,12 @@ __pycache__/
 # локальная база сервиса (сессии, история оценок, запуски анализа)
 repo_health.db
 *.sqlite3
+*.db
 
 # данные парсера (чтобы огромный датасет не улетал в GitHub)
-repo_health_data.csv
+repo_health_report.csv
 history.csv
+*.csv
 
 # сборщик: сырые JSON по репозиториям и временные клоны
 collector/output/

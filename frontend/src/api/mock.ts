@@ -5,6 +5,7 @@
  */
 import { ApiError } from './client';
 import type {
+  AiRecommendations,
   Analysis,
   AnalysisStage,
   LanguageFacet,
@@ -81,6 +82,20 @@ export const mockApi = {
   async getRepo(owner: string, name: string): Promise<RepoReport> {
     await sleep(150);
     return loadJson<RepoReport>(`reports/${fileNameFor(`${owner}/${name}`)}`);
+  },
+
+  /**
+   * В снимке модели нет: после паузы, как у настоящей генерации, возвращаются
+   * базовые рекомендации. model: null — интерфейс честно пишет, что ИИ не вызывался.
+   */
+  async generateAiRecommendations(fullPath: string): Promise<AiRecommendations> {
+    await sleep(1800);
+    const report = await loadJson<RepoReport>(`reports/${fileNameFor(fullPath)}`);
+    return {
+      recommendations: report.recommendations.map((r) => ({ ...r, id: `ai-${r.id}` })),
+      model: null,
+      generated_at: new Date().toISOString(),
+    };
   },
 
   async getLanguages(): Promise<LanguageFacet[]> {

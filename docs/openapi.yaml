@@ -86,6 +86,30 @@ paths:
                     language: { type: string }
                     count: { type: integer }
 
+  /repos/{owner}/{name}/recommendations/ai:
+    post:
+      tags: [rating]
+      summary: Рекомендации, сформулированные ИИ по фактам отчёта (пока не реализовано)
+      parameters:
+        - { in: path, name: owner, required: true, schema: { type: string } }
+        - { in: path, name: name, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Рекомендации ИИ в формате базовых
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recommendations, model, generated_at]
+                properties:
+                  recommendations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Recommendation' }
+                  model: { type: string, nullable: true, example: yandexgpt-lite }
+                  generated_at: { type: string, format: date-time }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+
   /stats:
     get:
       tags: [rating]

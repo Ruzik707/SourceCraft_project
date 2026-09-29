@@ -227,3 +227,11 @@ export interface Analysis {
   /** Итоговый отчёт появляется, когда status === 'succeeded' */
   report: RepoReport | null;
 }
+
+/** Рекомендации, переписанные ИИ по фактам отчёта. Формат тот же, что у базовых. */
+export interface AiRecommendations {
+  recommendations: Recommendation[];
+  /** Модель, которая сформировала ответ; null — модель не вызывалась (демо-режим) */
+  model: string | null;
+  generated_at: string;
+}

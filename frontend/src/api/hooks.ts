@@ -58,6 +58,13 @@ export function useStartAnalysis() {
   });
 }
 
+/** Генерация рекомендаций ИИ. Результат живёт в мутации и заменяет базовые только на экране. */
+export function useAiRecommendations() {
+  return useMutation({
+    mutationFn: (fullPath: string) => api.generateAiRecommendations(fullPath),
+  });
+}
+
 export function useAnalysis(id: string | null) {
   return useQuery({
     queryKey: queryKeys.analysis(id ?? ''),

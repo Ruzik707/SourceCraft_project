@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import type { ApiError } from '@/api/client';
+import { useAiRecommendations } from '@/api/hooks';
 import type { RepoReport } from '@/api/types';
-import { Badge, Card } from '@/components/ui';
+import { Badge, Banner, Card, Spinner } from '@/components/ui';
 import { CategoryRadar } from '@/components/score/CategoryRadar';
 import { ScoreGauge } from '@/components/score/ScoreGauge';
 import { Sparkline } from '@/components/score/Sparkline';
@@ -11,9 +13,26 @@ import { Recommendations } from './Recommendations';
 import { formatDateTime, formatNumber, formatPercent, formatScore, timeAgo } from '@/lib/format';
 import { CATEGORY_TITLE, scoreColor } from '@/lib/score';
 
+function aiErrorMessage(error: unknown): string {
+  const err = error as ApiError;
+  // Репозиторий уже на экране, значит 404 отдал не он, а отсутствующий эндпоинт
+  if (err.status === 404 || err.status === 501) return 'Сервер пока не умеет генерировать рекомендации.';
+  return err.userMessage ?? 'Не удалось получить ответ ИИ.';
+}
+
 export function ReportView({ report, actions }: { report: RepoReport; actions?: ReactNode }) {
   const scored = report.categories.filter((c) => c.score !== null);
-  const topRecs = report.recommendations.filter((r) => r.priority !== 'info').slice(0, 3);
+
+  // Ответ ИИ относится только к тому репозиторию, для которого его запросили:
+  // при переходе на другой отчёт снова показываются базовые рекомендации.
+  const ai = useAiRecommendations();
+  const aiForThis = ai.variables === report.full_path;
+  const aiResult = aiForThis ? ai.data : undefined;
+  const aiPending = aiForThis && ai.isPending;
+  const aiError = aiForThis && ai.isError ? aiErrorMessage(ai.error) : null;
+
+  const recommendations = aiResult?.recommendations ?? report.recommendations;
+  const topRecs = recommendations.filter((r) => r.priority !== 'info').slice(0, 3);
 
   return (
     <div className="stack" style={{ gap: 'var(--space-6)' }}>
@@ -93,6 +112,34 @@ export function ReportView({ report, actions }: { report: RepoReport; actions?: 
                   </a>
                 ))}
               </div>
+            ) : null}
+
+            <div className="row-wrap no-print">
+              {aiResult ? (
+                <>
+                  <a href="#recommendations" className="btn btn--sm">
+                    ✦ К рекомендациям ИИ
+                  </a>
+                  <button type="button" className="btn btn--sm btn--ghost" onClick={() => ai.reset()}>
+                    Вернуть базовые
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  disabled={aiPending}
+                  onClick={() => ai.mutate(report.full_path)}
+                >
+                  ✦ Сгенерировать рекомендации при помощи ИИ
+                </button>
+              )}
+              {aiPending ? <Spinner label="ИИ готовит рекомендации…" /> : null}
+            </div>
+            {aiError ? (
+              <Banner tone="warn" icon="!">
+                {aiError} Показаны базовые рекомендации.
+              </Banner>
             ) : null}
           </div>
         </div>
@@ -178,7 +225,17 @@ export function ReportView({ report, actions }: { report: RepoReport; actions?: 
       {/* ─────────────── рекомендации ─────────────── */}
       <section className="stack" id="recommendations">
         <h2>Приоритизированные рекомендации</h2>
-        <Recommendations items={report.recommendations} />
+
+        {aiResult ? (
+          <Banner icon="✦">
+            {aiResult.model
+              ? `Рекомендации сгенерированы ИИ (${aiResult.model}) по фактам этого отчёта — проверьте их, прежде чем применять.`
+              : 'Демо-режим: модель не вызывалась, показаны базовые рекомендации в том виде, в каком их вернёт ИИ.'}
+          </Banner>
+        ) : null}
+        <div aria-busy={aiPending} style={aiPending ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
+          <Recommendations items={recommendations} />
+        </div>
       </section>
 
       {/* ─────────────── данные ─────────────── */}

@@ -5,6 +5,7 @@
 import { API_BASE_URL, buildQuery, request, setToken } from './client';
 import { mockApi } from './mock';
 import type {
+  AiRecommendations,
   Analysis,
   LanguageFacet,
   OwnedRepo,
@@ -39,6 +40,16 @@ export const api = {
   getRepo(owner: string, name: string): Promise<RepoReport> {
     if (IS_MOCK) return mockApi.getRepo(owner, name);
     return request<RepoReport>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
+  },
+
+  /** Рекомендации от ИИ вместо базовых: генерируются по фактам отчёта. */
+  generateAiRecommendations(fullPath: string): Promise<AiRecommendations> {
+    if (IS_MOCK) return mockApi.generateAiRecommendations(fullPath);
+    const [owner, name] = fullPath.split('/');
+    return request<AiRecommendations>(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/recommendations/ai`,
+      { method: 'POST' },
+    );
   },
 
   getLanguages(): Promise<LanguageFacet[]> {

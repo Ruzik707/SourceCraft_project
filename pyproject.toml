@@ -1,7 +1,7 @@
 [project]
 name = "sourcecrafthackathon"
 version = "0.1.0"
-description = "Add your description here"
+description = "Explainable repository health scoring with FastAPI and optional LLM recommendations"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",

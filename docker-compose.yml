@@ -17,6 +17,9 @@ services:
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
       SECRET_KEY: ${SECRET_KEY:?задайте SECRET_KEY в .env}
+      REPO_HEALTH_CSV: /data/repo_health_report.csv
+      DATABASE_URL: sqlite:////data/repo_health.db
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       # На публичном стенде демо-вход обязательно выключен
       ALLOW_DEMO_AUTH: ${ALLOW_DEMO_AUTH:-false}
       YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}

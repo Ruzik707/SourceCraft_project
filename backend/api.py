@@ -141,7 +141,7 @@ async def generate_ai_recommendations(owner: str, name: str, current=Depends(aut
             "problem": rec.get("problem", ""),
             "why": why,
             "action": rec.get("action", ""),
-            "evidence": [{"label": "Источник", "value": "Анализ ИИ на базе метрик", "url": raw_row.get("url")}],
+            "evidence": [{"label": "Источник", "value": "Анализ ИИ на базе метрик" if ai_response.get("model") else "Правила по метрикам", "url": raw_row.get("url")}],
             "expected_gain": 0.0,
             "impact": rec.get("impact", "")
         })
@@ -150,7 +150,7 @@ async def generate_ai_recommendations(owner: str, name: str, current=Depends(aut
     return {
         "summary": ai_summary_text,
         "recommendations": formatted_recs,
-        "model": "llama-3.1-8b-instant",
+        "model": ai_response.get("model"),
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
 

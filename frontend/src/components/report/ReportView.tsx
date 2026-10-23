@@ -230,7 +230,7 @@ export function ReportView({ report, actions }: { report: RepoReport; actions?: 
           <Banner icon="✦">
             {aiResult.model
               ? `Рекомендации сгенерированы ИИ (${aiResult.model}) по фактам этого отчёта — проверьте их, прежде чем применять.`
-              : 'Демо-режим: модель не вызывалась, показаны базовые рекомендации в том виде, в каком их вернёт ИИ.'}
+              : 'Показаны базовые рекомендации по метрикам репозитория. Генерация моделью не подтверждена.'}
           </Banner>
         ) : null}
         <div aria-busy={aiPending} style={aiPending ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>

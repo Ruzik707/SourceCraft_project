@@ -30,3 +30,7 @@ history.csv
 # сборщик: сырые JSON по репозиториям и временные клоны
 collector/output/
 collector/.workdir/
+
+# Local IDE and notebook state
+.idea/
+.ipynb_checkpoints/
